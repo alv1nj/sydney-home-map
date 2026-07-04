@@ -187,9 +187,10 @@
     font-size:13px; color:var(--ink2); font-weight:700; }
 
   .stn { cursor:pointer; }
-  /* 缩放分级标签 */
-  svg[data-z="0"] text.p1, svg[data-z="0"] text.p2, svg[data-z="0"] text.en2 { display:none; }
-  svg[data-z="1"] text.p2, svg[data-z="1"] text.en2 { display:none; }
+  /* 缩放分级标签：p1/p2 随缩放出现；中文小字仅深度缩放时显示 */
+  svg[data-z="0"] text.p1, svg[data-z="0"] text.p2 { display:none; }
+  svg[data-z="1"] text.p2 { display:none; }
+  svg:not([data-z="2"]) .zh2 { display:none; }
 </style>
 </head>
 <body>
@@ -243,7 +244,8 @@
 // ════════ 投影 ════════
 const PX = lo => (lo-150.63)*1162+18;
 const PY = la => (-33.56-la)*1400+16;
-for(const s of STATIONS){ s.x=PX(s.lo); s.y=PY(s.la); if(s.p===undefined) s.p=2; if(!s.g) s.g=3; }
+for(const s of STATIONS){ s.x=PX(s.lo); s.y=PY(s.la);
+  if(s.p===undefined) s.p = s.hub?0:2; if(!s.g) s.g=3; }
 
 const svg = document.getElementById("map");
 const NS = "http://www.w3.org/2000/svg";
@@ -326,19 +328,14 @@ for(const s of STATIONS){
     filter:s.hub?"url(#softShadow)":"none",
     ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
   if(s.hub) el("circle",{cx:s.x,cy:s.y,r:1.9,fill:multi?"#26262a":L0.color},g);
-  const pr = s.hub?0:s.p;
-  const anchor = s.lbl==="left"?"end":(s.lbl==="top"||s.lbl==="bottom"?"middle":"start");
-  let tx=s.x+6.5, ty=s.y+3;
-  if(s.lbl==="left"){tx=s.x-6.5;} else if(s.lbl==="top"){tx=s.x;ty=s.y-7;}
-  else if(s.lbl==="bottom"){tx=s.x;ty=s.y+12;}
-  const t=el("text",{x:tx,y:ty,"text-anchor":anchor,"font-size":s.hub?"8.5":"7",class:"p"+pr,
+  // 45° 斜排标签（平行斜排互不重叠）：英文为主 + 中文小字
+  const t=el("text",{x:s.x+6,y:s.y+2.2,"font-size":s.hub?"7":"5.8",class:"p"+s.p,
+    transform:`rotate(-45 ${s.x} ${s.y})`,
     fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
-    stroke:"rgba(247,246,242,.92)","stroke-width":"2.6"},g);
-  t.textContent=s.zh;
-  const t2=el("text",{x:tx,y:ty+6.5,"text-anchor":anchor,"font-size":"4.6",class:"en2",
-    fill:"#8e8e93","font-weight":"500","paint-order":"stroke",
-    stroke:"rgba(247,246,242,.92)","stroke-width":"2"},g);
-  t2.textContent=s.en;
+    stroke:"rgba(247,246,242,.92)","stroke-width":s.hub?"2.6":"2.2"},g);
+  t.textContent=s.en;
+  const ts=el("tspan",{dx:"3","font-size":s.hub?"5":"4.6",fill:"#8e8e93",class:"zh2"},t);
+  ts.textContent=s.zh;
   g.addEventListener("click",ev=>{ev.stopPropagation(); if(!dragMoved) showSheet(s);});
 }
 
