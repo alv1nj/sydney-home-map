@@ -278,6 +278,24 @@ function warp(x,y){
 }
 for(const s of STATIONS){ [s.x,s.y]=warp(PX(s.lo),PY(s.la));
   if(s.p===undefined) s.p = s.hub?0:2; if(!s.g) s.g=3; }
+// 微观松弛：把间距过近的站点推开（示意图惯例的局部失真，换取每站清晰可辨）
+{
+  const MS=7.5;
+  for(let it=0; it<40; it++){
+    let moved=false;
+    for(let i=0;i<STATIONS.length;i++) for(let j=i+1;j<STATIONS.length;j++){
+      const a=STATIONS[i], b=STATIONS[j];
+      let dx=b.x-a.x, dy=b.y-a.y; const d=Math.hypot(dx,dy);
+      if(d>=MS) continue;
+      if(d<0.01){ dx=1; dy=0; }
+      const u=(d||1), push=(MS-d)*0.25;
+      a.x-=dx/u*push; a.y-=dy/u*push;
+      b.x+=dx/u*push; b.y+=dy/u*push;
+      moved=true;
+    }
+    if(!moved) break;
+  }
+}
 
 const svg = document.getElementById("map");
 const NS = "http://www.w3.org/2000/svg";
@@ -320,6 +338,8 @@ for(const wl of WATER_LABELS){
 }
 
 // ════════ 线路 ════════
+// 反向缩放登记表：BW=按缩放变细的描边  ANCH=围绕锚点整体缩小的组
+const BW=[], ANCH=[], NAVBW=[], NAVANCH=[];
 const gLines = el("g",{class:"dimmable"});
 for(const rk in ROUTES){
   const lk = ROUTE_LINE[rk] || rk;
@@ -328,11 +348,11 @@ for(const rk in ROUTES){
   const pts = ROUTES[rk].map(id=>{const s=$id(id);return [s.x+off[0],s.y+off[1]];});
   const d = roundedPath(pts,8);
   const wMain = L.lr ? 2.6 : (L.open ? 4.6 : 4.2);
-  el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.6,
-    "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.8"},gLines);
-  el("path",{d,fill:"none",stroke:L.color,"stroke-width":wMain,
+  BW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.6,
+    "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.8"},gLines), w:wMain+2.6});
+  BW.push({el:el("path",{d,fill:"none",stroke:L.color,"stroke-width":wMain,
     "stroke-linecap":"round","stroke-linejoin":"round",
-    ...(L.open?{}:{"stroke-dasharray":"8 6"})},gLines);
+    ...(L.open?{}:{"stroke-dasharray":"8 6"})},gLines), w:wMain});
 }
 // 未通车线路年份标签
 const YEAR_TAGS=[ {rk:"MSW",text:"2026",idx:5,dy:16}, {rk:"MA",text:"2027",idx:2,dy:-14},
@@ -345,14 +365,16 @@ for(const tg of YEAR_TAGS){
   const t=el("text",{x:s.x,y:s.y+tg.dy+2.5,"text-anchor":"middle","font-size":"8.5",
     fill:"#fff","font-weight":"700","letter-spacing":"0.5"},g);
   t.textContent=tg.text;
+  ANCH.push([g, s.x, s.y+tg.dy-1.5]);
 }
 
 // ════════ 站点 ════════
 // 标签自动避让布局（东京/北京地铁图风格：水平文字，每站在 8 个方位中选不重叠的位置）
 // 高优先级(p0/枢纽)先占位；全部标签互不重叠 → 任何缩放级别的可见子集也不重叠
 function stnR(s){ return s.hub?4.6 : (s.ln.every(k=>LINES[k].lr)?2.3:3); }
-function labelDims(s){
-  const fs = s.hub?6.8 : (s.p===2?4.7:5.5);
+function labelDims(s,sc){
+  sc = sc || s._lsc || 1;
+  const fs = (s.hub?6.8 : (s.p===2?4.7:5.5))*sc;
   const zfs = fs*0.74;
   const w = Math.max(s.en.length*fs*0.56, s.zh.length*zfs*1.02)+1.6;
   const h = fs + zfs*1.15 + 1.0;
@@ -372,26 +394,33 @@ for(const tg of YEAR_TAGS){ const st=$id(ROUTES[tg.rk][tg.idx]);
 
 const LPOS={};
 for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
-  const {w,h}=labelDims(s), r=stnR(s);
-  let best=null, bestA=Infinity, ring=0;
-  for(const [ri,d] of [r+2.0, r+5.0, r+8.5].entries()){
-    const dd=d-0.2;
-    const cands=[
-      {a:"start", x:s.x+d,  b:[s.x+d,      s.y-h/2 ]},   // 东
-      {a:"end",   x:s.x-d,  b:[s.x-d-w,    s.y-h/2 ]},   // 西
-      {a:"start", x:s.x+dd, b:[s.x+dd,     s.y-dd-h]},   // 东北
-      {a:"start", x:s.x+dd, b:[s.x+dd,     s.y+dd  ]},   // 东南
-      {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y-dd-h]},   // 西北
-      {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y+dd  ]},   // 西南
-      {a:"middle",x:s.x,    b:[s.x-w/2,    s.y-d-h ]},   // 北
-      {a:"middle",x:s.x,    b:[s.x-w/2,    s.y+d   ]},   // 南
-    ];
-    for(const c of cands){
-      const box={x0:c.b[0],y0:c.b[1],x1:c.b[0]+w,y1:c.b[1]+h};
-      if(!lblHit(box)){ best={a:c.a,x:c.x,box,ring:ri}; bestA=0; break; }
-      const a=lblOverlap(box);
-      if(a<bestA){ bestA=a; best={a:c.a,x:c.x,box,ring:ri}; }
+  const r=stnR(s);
+  let best=null, bestA=Infinity;
+  // 放不下时逐级缩小字号重试（密集小站用更小字，地铁图惯例）
+  for(const sc of [1, 0.85, 0.72]){
+    const {w,h}=labelDims(s,sc);
+    bestA=Infinity;
+    for(const [ri,d] of [r+2.0, r+5.0, r+8.5].entries()){
+      const dd=d-0.2;
+      const cands=[
+        {a:"start", x:s.x+d,  b:[s.x+d,      s.y-h/2 ]},   // 东
+        {a:"end",   x:s.x-d,  b:[s.x-d-w,    s.y-h/2 ]},   // 西
+        {a:"start", x:s.x+dd, b:[s.x+dd,     s.y-dd-h]},   // 东北
+        {a:"start", x:s.x+dd, b:[s.x+dd,     s.y+dd  ]},   // 东南
+        {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y-dd-h]},   // 西北
+        {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y+dd  ]},   // 西南
+        {a:"middle",x:s.x,    b:[s.x-w/2,    s.y-d-h ]},   // 北
+        {a:"middle",x:s.x,    b:[s.x-w/2,    s.y+d   ]},   // 南
+      ];
+      for(const c of cands){
+        const box={x0:c.b[0],y0:c.b[1],x1:c.b[0]+w,y1:c.b[1]+h};
+        if(!lblHit(box)){ best={a:c.a,x:c.x,box,ring:ri}; bestA=0; break; }
+        const a=lblOverlap(box);
+        if(a<bestA){ bestA=a; best={a:c.a,x:c.x,box,ring:ri}; }
+      }
+      if(bestA===0) break;
     }
+    s._lsc=sc;
     if(bestA===0) break;
   }
   obst.push(best.box);
@@ -401,6 +430,7 @@ for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
 const gStns = el("g",{class:"dimmable"});
 for(const s of STATIONS){
   const g=el("g",{class:"stn"},gStns);
+  s._g=g;
   const multi=s.ln.length>1;
   const L0=LINES[s.ln[0]];
   const allFuture=s.ln.every(k=>!LINES[k].open);
@@ -704,6 +734,7 @@ function navMsg(html){
 function clearNav(){
   if(!nav.o&&!nav.route) return;
   nav={o:null,route:null}; gNav.innerHTML="";
+  NAVBW.length=0; NAVANCH.length=0;
   navBar.classList.remove("show"); svg.classList.remove("navOn");
 }
 function markPin(s,color,txt){
@@ -713,26 +744,30 @@ function markPin(s,color,txt){
   const t=el("text",{x:s.x,y:s.y-6.7,"text-anchor":"middle","font-size":"6.2",
     fill:"#fff","font-weight":"800"},g);
   t.textContent=txt;
+  NAVANCH.push([g,s.x,s.y]);
 }
 function drawRoute(rt,dst){
-  gNav.innerHTML="";
+  gNav.innerHTML=""; NAVBW.length=0; NAVANCH.length=0;
   for(const leg of buildLegs(rt.edges)){
     if(leg.kind==="walk"){
-      el("path",{d:roundedPath(leg.sts.map(s=>[s.x,s.y]),8),fill:"none",stroke:"#555",
-        "stroke-width":"2.4","stroke-dasharray":"3 3","stroke-linecap":"round"},gNav);
+      NAVBW.push({el:el("path",{d:roundedPath(leg.sts.map(s=>[s.x,s.y]),8),fill:"none",stroke:"#555",
+        "stroke-width":"2.4","stroke-dasharray":"3 3","stroke-linecap":"round"},gNav), w:2.4});
       continue;
     }
     const off=ROUTE_OFF[leg.line]||[0,0];
     const d=roundedPath(leg.sts.map(s=>[s.x+off[0],s.y+off[1]]),8);
-    el("path",{d,fill:"none",stroke:"#fff","stroke-width":"9",
-      "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.92"},gNav);
-    el("path",{d,fill:"none",stroke:LINES[leg.line].color,"stroke-width":"5.2",
-      "stroke-linecap":"round","stroke-linejoin":"round"},gNav);
-    for(const s of leg.sts)
-      el("circle",{cx:s.x+off[0],cy:s.y+off[1],r:2,fill:"#fff",
+    NAVBW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":"9",
+      "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.92"},gNav), w:9});
+    NAVBW.push({el:el("path",{d,fill:"none",stroke:LINES[leg.line].color,"stroke-width":"5.2",
+      "stroke-linecap":"round","stroke-linejoin":"round"},gNav), w:5.2});
+    for(const s of leg.sts){
+      const c=el("circle",{cx:s.x+off[0],cy:s.y+off[1],r:2,fill:"#fff",
         stroke:"#26262a","stroke-width":"1.1"},gNav);
+      NAVANCH.push([c,s.x+off[0],s.y+off[1]]);
+    }
   }
   markPin(nav.o,"#1d4fa8","起"); markPin(dst,"#d0342c","终");
+  applyLS(true);
 }
 function setDest(s){
   const rt=dijkstra(nav.o,s);
@@ -762,9 +797,27 @@ function stnTap(s){
 // ════════ 缩放 / 平移 ════════
 const VB={x:0,y:0,w:815,h:870};
 let vb={...VB};
+// 反向缩放（北京地铁风格）：深度放大时站点符号/文字/年份牌保持屏幕恒定大小，
+// 只有线路几何被拉开 → 越放大越清爽，不会挤成一团
+const LSREF=260;
+let curLS=-1;
+function applyLS(force){
+  const ls=Math.min(1, vb.w/LSREF);
+  if(!force && Math.abs(ls-curLS)<0.015) return;
+  curLS=ls;
+  const t=1-ls, lsr=ls.toFixed(3);
+  for(const s of STATIONS)
+    s._g.setAttribute("transform",`translate(${(s.x*t).toFixed(2)} ${(s.y*t).toFixed(2)}) scale(${lsr})`);
+  for(const [g,ax,ay] of ANCH.concat(NAVANCH))
+    g.setAttribute("transform",`translate(${(ax*t).toFixed(2)} ${(ay*t).toFixed(2)}) scale(${lsr})`);
+  const lw=Math.sqrt(ls);
+  for(const p of BW.concat(NAVBW))
+    p.el.setAttribute("stroke-width",(p.w*lw).toFixed(2));
+}
 function apply(){
   svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.dataset.z = vb.w<=280 ? "2" : (vb.w<=540 ? "1" : "0");
+  applyLS(false);
 }
 const ZMIN=55, ZMAX=1700;
 function zoomAt(f,cx,cy){
