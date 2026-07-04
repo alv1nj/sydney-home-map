@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#123c85">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<meta name="apple-mobile-web-app-title" content="悉尼购房助手">
+<title>悉尼购房助手</title>
+<style>
+  :root {
+    --blue:#1d4fa8; --blue-dark:#0f2f6d;
+    --teal:#168388; --teal-dark:#0e5a5e;
+    --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#aeaeb2;
+    --paper:#f7f6f2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+    background:var(--paper); color:var(--ink);
+    -webkit-font-smoothing:antialiased; }
+  #app { display:flex; flex-direction:column; height:100%; height:100dvh; }
+
+  /* ── 顶栏 ── */
+  header {
+    background:linear-gradient(135deg,var(--blue-dark) 0%,var(--blue) 62%,#3e77d8 100%);
+    color:#fff; padding:12px 16px calc(12px);
+    padding-top:calc(12px + env(safe-area-inset-top));
+    display:flex; align-items:center; gap:12px; z-index:30;
+    box-shadow:0 1px 0 rgba(255,255,255,.15) inset, 0 4px 18px rgba(15,47,109,.35);
+  }
+  .roundel {
+    width:38px; height:38px; border-radius:50%; flex:none;
+    background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);
+  }
+  .roundel svg { width:24px; height:24px; display:block; }
+  header .titles { flex:1; min-width:0; }
+  header h1 { font-size:17px; font-weight:700; letter-spacing:.3px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header .sub { font-size:11px; opacity:.75; margin-top:1px; font-weight:500; letter-spacing:.2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header button {
+    background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35);
+    color:#fff; border-radius:18px; padding:6px 13px; font-size:13px; font-weight:600;
+    backdrop-filter:blur(8px); flex:none;
+  }
+
+  #mapWrap { flex:1; position:relative; overflow:hidden; touch-action:none;
+    background:
+      radial-gradient(1200px 800px at 75% 30%, #ffffff 0%, transparent 60%),
+      var(--paper); }
+  svg#map { width:100%; height:100%; display:block; cursor:grab; }
+
+  .glass {
+    background:rgba(255,255,255,.8);
+    backdrop-filter:blur(16px) saturate(1.5);
+    -webkit-backdrop-filter:blur(16px) saturate(1.5);
+    border:1px solid rgba(0,0,0,.06);
+    box-shadow:0 8px 28px rgba(20,40,50,.14), 0 1px 0 rgba(255,255,255,.9) inset;
+  }
+
+  /* ── 图例 ── */
+  #legend {
+    position:absolute; top:12px; left:12px; z-index:20;
+    border-radius:16px; padding:12px 15px;
+    font-size:12px; line-height:1.95; max-width:250px; display:none;
+    max-height:calc(100% - 90px); overflow-y:auto;
+  }
+  #legend.show { display:block; }
+  #legend .row { display:flex; align-items:center; gap:9px; font-weight:500; white-space:nowrap; }
+  #legend .sw { width:26px; height:5px; border-radius:3px; flex:none; }
+  #legend .swd { width:26px; height:0; border-top:4.5px dashed; border-radius:3px; flex:none; }
+  #legend .yr { margin-left:auto; font-size:10px; font-weight:700; color:#fff;
+    border-radius:8px; padding:1px 7px; }
+  #legend .note { font-size:10.5px; color:var(--ink2); line-height:1.55; margin-top:8px;
+    border-top:1px solid rgba(0,0,0,.08); padding-top:8px; font-weight:400; white-space:normal; }
+  #legend a { color:var(--blue); font-weight:600; text-decoration:none; }
+
+  /* ── 搜索 ── */
+  #searchBox {
+    position:absolute; top:12px; right:12px; z-index:22; width:min(62%, 300px);
+    border-radius:16px; padding:8px 10px; display:none;
+  }
+  #searchBox.show { display:block; }
+  #searchBox input { width:100%; border:none; outline:none; background:transparent;
+    font-size:15px; font-weight:600; color:var(--ink); }
+  #searchRes { margin-top:4px; max-height:280px; overflow-y:auto; }
+  .srItem { display:flex; align-items:center; gap:8px; padding:8px 4px;
+    border-top:1px solid rgba(0,0,0,.06); cursor:pointer; }
+  .srItem .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .srItem .n { font-size:13.5px; font-weight:700; }
+  .srItem .e { font-size:10.5px; color:var(--ink2); }
+  .srItem .lns { margin-left:auto; font-size:9.5px; font-weight:800; color:var(--ink2); flex:none; }
+
+  /* ── 缩放控件 ── */
+  #zoomCtrl {
+    position:absolute; right:12px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:20;
+    border-radius:22px; overflow:hidden; display:flex; flex-direction:column;
+  }
+  #zoomCtrl button {
+    width:44px; height:44px; border:none; background:transparent;
+    font-size:19px; color:var(--blue-dark); font-weight:600;
+  }
+  #zoomCtrl button:not(:last-child){ border-bottom:1px solid rgba(0,0,0,.07); }
+  #zoomCtrl button:active { background:rgba(29,79,168,.12); }
+
+  /* ── 底部详情卡 ── */
+  #sheet {
+    position:absolute; left:10px; right:10px;
+    bottom:calc(10px + env(safe-area-inset-bottom)); z-index:40;
+    border-radius:22px; padding:16px 18px 18px;
+    transform:translateY(calc(100% + 40px));
+    transition:transform .45s cubic-bezier(.32,.72,.24,1);
+    max-height:70%; overflow-y:auto;
+  }
+  #sheet.show { transform:translateY(0); }
+  #sheet .accent { position:absolute; left:0; top:0; bottom:0; width:5px;
+    border-radius:22px 0 0 22px; }
+  #sheet .handle { width:36px; height:4.5px; background:rgba(0,0,0,.15);
+    border-radius:3px; margin:0 auto 12px; }
+  #sheet h2 { font-size:21px; font-weight:800; letter-spacing:.2px; }
+  #sheet .en { font-size:13px; color:var(--ink2); margin:2px 0 10px; font-weight:500; }
+  #sheet .badges { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .badge { font-size:11px; font-weight:600; padding:4px 11px; border-radius:20px; color:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.15); }
+  .badge.outline { background:#fff !important; box-shadow:none; }
+
+  .cbdCard { display:flex; align-items:center; gap:12px;
+    background:rgba(29,79,168,.08); border:1px solid rgba(29,79,168,.18);
+    border-radius:14px; padding:11px 14px; margin-bottom:10px; }
+  .cbdCard .icon { font-size:20px; }
+  .cbdCard .k { font-size:10.5px; color:var(--ink2); font-weight:600; letter-spacing:.3px; }
+  .cbdCard .v { font-size:16px; font-weight:800; margin-top:1px; }
+  .cbdCard .v small { font-size:11px; font-weight:500; color:var(--ink2); }
+
+  /* 海拔/洪水 双格 */
+  .duo { display:flex; gap:8px; margin-bottom:10px; }
+  .duo .cell { flex:1; border-radius:14px; padding:10px 13px;
+    background:rgba(0,0,0,.035); border:1px solid rgba(0,0,0,.06); }
+  .duo .k { font-size:10.5px; color:var(--ink2); font-weight:600; }
+  .duo .v { font-size:19px; font-weight:800; margin-top:2px; }
+  .duo .v small { font-size:11px; font-weight:600; color:var(--ink2); }
+  .flBadge { display:inline-block; font-size:13px; font-weight:800; color:#fff;
+    border-radius:9px; padding:3px 12px; margin-top:2px; }
+  .flNote { border-radius:12px; padding:9px 13px; margin:-4px 0 10px;
+    background:rgba(224,123,31,.09); border:1px dashed rgba(224,123,31,.4);
+    font-size:11.5px; color:#8a5514; font-weight:500; line-height:1.5; }
+
+  .lgaCard { border-radius:14px; padding:11px 14px 8px; background:rgba(0,0,0,.035);
+    border:1px solid rgba(0,0,0,.06); margin-bottom:10px; }
+  .lgaCard .lh { font-size:11px; font-weight:800; color:var(--ink2);
+    letter-spacing:.4px; margin-bottom:6px; }
+  .lgaRow { display:flex; gap:8px; padding:5.5px 0; font-size:12px; align-items:baseline; }
+  .lgaRow + .lgaRow { border-top:1px dashed rgba(0,0,0,.07); }
+  .lgaRow .ic { flex:none; width:18px; text-align:center; }
+  .lgaRow .k { flex:none; width:78px; color:var(--ink2); font-weight:600; font-size:11px; }
+  .lgaRow .v { flex:1; font-weight:600; line-height:1.5; }
+  .lgaRow .v small { color:var(--ink2); font-weight:500; }
+  .safeBadge { font-size:10.5px; font-weight:800; color:#fff; border-radius:8px;
+    padding:1.5px 8px; margin-right:6px; white-space:nowrap; }
+  .stars { color:#e8a30f; letter-spacing:2px; font-size:13px; }
+  .stars .off { color:rgba(0,0,0,.15); }
+
+  .reaBtn { display:flex; align-items:center; gap:10px; text-decoration:none;
+    background:linear-gradient(135deg,#e4002b,#c30023); color:#fff;
+    border-radius:14px; padding:12px 15px; margin-bottom:10px;
+    box-shadow:0 3px 10px rgba(228,0,43,.3); }
+  .reaBtn:active { transform:scale(.985); }
+  .reaBtn .ri { font-size:19px; flex:none; }
+  .reaBtn .rt { flex:1; }
+  .reaBtn .rt .t1 { display:block; font-size:13.5px; font-weight:800; }
+  .reaBtn .rt .t2 { display:block; font-size:10px; opacity:.8; font-weight:500; margin-top:1px; }
+  .reaBtn .ra { flex:none; font-size:15px; font-weight:700; opacity:.85; }
+  .reaBtn.sold { background:linear-gradient(135deg,#5a4fcf,#3f37a3);
+    box-shadow:0 3px 10px rgba(90,79,207,.3); }
+  .reaBtn.gmap { background:linear-gradient(135deg,#4285f4,#1a73e8);
+    box-shadow:0 3px 10px rgba(26,115,232,.3); }
+
+  #sheet .foot { font-size:10px; color:var(--ink3); margin-top:11px; line-height:1.5; }
+  #closeSheet { position:absolute; right:14px; top:14px; border:none;
+    background:rgba(0,0,0,.06); width:29px; height:29px; border-radius:50%;
+    font-size:13px; color:var(--ink2); font-weight:700; }
+
+  .stn { cursor:pointer; }
+  /* 缩放分级标签 */
+  svg[data-z="0"] text.p1, svg[data-z="0"] text.p2, svg[data-z="0"] text.en2 { display:none; }
+  svg[data-z="1"] text.p2, svg[data-z="1"] text.en2 { display:none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="roundel"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <g fill="#1d4fa8">
+        <path d="M50,12 L92,48 L84,48 L84,88 L60,88 L60,62 L40,62 L40,88 L16,88 L16,48 L8,48 Z"/>
+      </g><rect x="12" y="92" width="76" height="6" rx="3" fill="#1d4fa8"/></svg></div>
+    <div class="titles">
+      <h1>悉尼购房助手</h1>
+      <div class="sub">Sydney Rail & Property · 2026年7月</div>
+    </div>
+    <button id="searchBtn">搜索</button>
+    <button id="legendBtn">图例</button>
+  </header>
+
+  <div id="mapWrap">
+    <div id="legend" class="glass"></div>
+
+    <div id="searchBox" class="glass">
+      <input id="searchInput" type="search" placeholder="搜索站点 / 郊区…" autocomplete="off">
+      <div id="searchRes"></div>
+    </div>
+
+    <div id="zoomCtrl" class="glass">
+      <button id="zin">＋</button>
+      <button id="zout">－</button>
+      <button id="zreset" style="font-size:15px">⟲</button>
+    </div>
+
+    <svg id="map" xmlns="http://www.w3.org/2000/svg" data-z="0"></svg>
+
+    <div id="sheet" class="glass">
+      <div class="accent" id="sAccent"></div>
+      <div class="handle"></div>
+      <button id="closeSheet">✕</button>
+      <h2 id="sName"></h2>
+      <div class="en" id="sEn"></div>
+      <div class="badges" id="sBadges"></div>
+      <div id="sBody"></div>
+      <div class="foot" id="sFoot"></div>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="stations.js"></script>
+<script>
+"use strict";
+// ════════ 投影 ════════
+const PX = lo => (lo-150.63)*1162+18;
+const PY = la => (-33.56-la)*1400+16;
+for(const s of STATIONS){ s.x=PX(s.lo); s.y=PY(s.la); if(s.p===undefined) s.p=2; if(!s.g) s.g=3; }
+
+const svg = document.getElementById("map");
+const NS = "http://www.w3.org/2000/svg";
+const $id = id => STATIONS.find(s=>s.id===id);
+function el(tag, attrs, parent){ const e=document.createElementNS(NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); (parent||svg).appendChild(e); return e; }
+
+function roundedPath(pts, r){
+  const n=pts.length, seg=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+  const lerp=(a,b,t)=>[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  let d=`M${pts[0][0]},${pts[0][1]} `;
+  for(let i=1;i<n-1;i++){
+    const p=pts[i], prev=pts[i-1], next=pts[i+1];
+    const r1=Math.min(r, seg(prev,p)/2), r2=Math.min(r, seg(p,next)/2);
+    const a=lerp(p,prev,r1/seg(prev,p)), b=lerp(p,next,r2/seg(p,next));
+    d += `L${a[0]},${a[1]} Q${p[0]},${p[1]} ${b[0]},${b[1]} `;
+  }
+  return d+`L${pts[n-1][0]},${pts[n-1][1]}`;
+}
+
+// ════════ 底图：水系 ════════
+const defs=el("defs",{});
+const f=el("filter",{id:"softShadow",x:"-40%",y:"-40%",width:"180%",height:"180%"},defs);
+el("feDropShadow",{dx:"0",dy:"1.2",stdDeviation:"1.6","flood-opacity":"0.3"},f);
+const gWater = el("g",{});
+for(const w of WATER){
+  const pts=w.pts.map(p=>[PX(p[1]),PY(p[0])]);
+  if(w.kind==="fill"){
+    el("path",{d:roundedPath(pts,20)+"Z",fill:"#bcd9e8",opacity:"0.55",stroke:"none"},gWater);
+  } else {
+    el("path",{d:roundedPath(pts,20),fill:"none",stroke:"#bcd9e8","stroke-width":w.w,
+      "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.6"},gWater);
+  }
+}
+for(const wl of WATER_LABELS){
+  const t=el("text",{x:PX(wl.lo),y:PY(wl.la),"font-size":"9",fill:"#5b8aa6",
+    "font-style":"italic",opacity:"0.85"},gWater);
+  t.textContent=wl.text;
+}
+
+// ════════ 线路 ════════
+const gLines = el("g",{});
+for(const rk in ROUTES){
+  const lk = ROUTE_LINE[rk] || rk;
+  const L = LINES[lk];
+  const off = ROUTE_OFF[rk] || [0,0];
+  const pts = ROUTES[rk].map(id=>{const s=$id(id);return [s.x+off[0],s.y+off[1]];});
+  const d = roundedPath(pts,8);
+  const wMain = L.lr ? 2.6 : (L.open ? 4.6 : 4.2);
+  el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.6,
+    "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.8"},gLines);
+  el("path",{d,fill:"none",stroke:L.color,"stroke-width":wMain,
+    "stroke-linecap":"round","stroke-linejoin":"round",
+    ...(L.open?{}:{"stroke-dasharray":"8 6"})},gLines);
+}
+// 未通车线路年份标签
+const YEAR_TAGS=[ {rk:"MSW",text:"2026",idx:5,dy:16}, {rk:"MA",text:"2027",idx:2,dy:-14},
+                  {rk:"MW",text:"2032",idx:4,dy:-14} ];
+for(const tg of YEAR_TAGS){
+  const lk=ROUTE_LINE[tg.rk]||tg.rk, L=LINES[lk];
+  const s=$id(ROUTES[tg.rk][tg.idx]);
+  const g=el("g",{},gLines);
+  el("rect",{x:s.x-17,y:s.y+tg.dy-9,width:34,height:15,rx:7.5,fill:L.color,filter:"url(#softShadow)"},g);
+  const t=el("text",{x:s.x,y:s.y+tg.dy+2.5,"text-anchor":"middle","font-size":"8.5",
+    fill:"#fff","font-weight":"700","letter-spacing":"0.5"},g);
+  t.textContent=tg.text;
+}
+
+// ════════ 站点 ════════
+const gStns = el("g",{});
+for(const s of STATIONS){
+  const g=el("g",{class:"stn"},gStns);
+  const multi=s.ln.length>1;
+  const L0=LINES[s.ln[0]];
+  const allFuture=s.ln.every(k=>!LINES[k].open);
+  const lrOnly=s.ln.every(k=>LINES[k].lr);
+  const r = s.hub?4.6 : (lrOnly?2.3:3);
+  el("circle",{cx:s.x,cy:s.y,r,fill:"#fff",
+    stroke:multi?"#26262a":L0.color,"stroke-width":s.hub?1.9:1.6,
+    filter:s.hub?"url(#softShadow)":"none",
+    ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
+  if(s.hub) el("circle",{cx:s.x,cy:s.y,r:1.9,fill:multi?"#26262a":L0.color},g);
+  const pr = s.hub?0:s.p;
+  const anchor = s.lbl==="left"?"end":(s.lbl==="top"||s.lbl==="bottom"?"middle":"start");
+  let tx=s.x+6.5, ty=s.y+3;
+  if(s.lbl==="left"){tx=s.x-6.5;} else if(s.lbl==="top"){tx=s.x;ty=s.y-7;}
+  else if(s.lbl==="bottom"){tx=s.x;ty=s.y+12;}
+  const t=el("text",{x:tx,y:ty,"text-anchor":anchor,"font-size":s.hub?"8.5":"7",class:"p"+pr,
+    fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
+    stroke:"rgba(247,246,242,.92)","stroke-width":"2.6"},g);
+  t.textContent=s.zh;
+  const t2=el("text",{x:tx,y:ty+6.5,"text-anchor":anchor,"font-size":"4.6",class:"en2",
+    fill:"#8e8e93","font-weight":"500","paint-order":"stroke",
+    stroke:"rgba(247,246,242,.92)","stroke-width":"2"},g);
+  t2.textContent=s.en;
+  g.addEventListener("click",ev=>{ev.stopPropagation(); if(!dragMoved) showSheet(s);});
+}
+
+// ════════ 图例 ════════
+const legend=document.getElementById("legend");
+{
+  let h="";
+  for(const k in LINES){
+    const L=LINES[k];
+    h += `<div class="row">`+
+      (L.open?`<span class="sw" style="background:${L.color}"></span>`
+             :`<span class="swd" style="border-color:${L.color}"></span>`)+
+      L.name+(L.open?"":`<span class="yr" style="background:${L.color}">${L.year}</span>`)+`</div>`;
+  }
+  h += `<div class="note">实线=已通车 · 虚线=在建。点击站点查看<b>海拔·洪水风险·升值潜力·Council 费率</b>等购房参考。放大地图可显示更多站名。走向与停站为示意。<br>
+  找租房？用姊妹工具 <a href="https://sydney-metro-rent.pages.dev" target="_blank" rel="noopener">悉尼 Metro 租房助手 ↗</a></div>`;
+  legend.innerHTML=h;
+}
+document.getElementById("legendBtn").onclick=()=>{
+  legend.classList.toggle("show"); searchBox.classList.remove("show"); };
+
+// ════════ 搜索 ════════
+const searchBox=document.getElementById("searchBox");
+const searchInput=document.getElementById("searchInput");
+const searchRes=document.getElementById("searchRes");
+document.getElementById("searchBtn").onclick=()=>{
+  searchBox.classList.toggle("show"); legend.classList.remove("show");
+  if(searchBox.classList.contains("show")) searchInput.focus();
+};
+searchInput.addEventListener("input",()=>{
+  const q=searchInput.value.trim().toLowerCase();
+  if(!q){ searchRes.innerHTML=""; return; }
+  const hits=STATIONS.filter(s=>
+    s.zh.includes(q)||s.en.toLowerCase().includes(q)||s.sub.toLowerCase().includes(q)
+    ||String(s.pc).startsWith(q)).slice(0,9);
+  searchRes.innerHTML=hits.map(s=>`<div class="srItem" data-id="${s.id}">
+    <span class="dot" style="background:${LINES[s.ln[0]].color}"></span>
+    <span><span class="n">${s.zh}</span> <span class="e">${s.en}</span></span>
+    <span class="lns">${s.ln.join("·")}</span></div>`).join("");
+  for(const it of searchRes.querySelectorAll(".srItem")){
+    it.onclick=()=>{ const s=$id(it.dataset.id);
+      searchBox.classList.remove("show"); searchInput.value=""; searchRes.innerHTML="";
+      focusStation(s); showSheet(s); };
+  }
+});
+function focusStation(s){
+  const w=200; vb={x:s.x-w/2, y:s.y-w*(VB.h/VB.w)/4.5, w, h:w*(VB.h/VB.w)}; apply();
+}
+
+// ════════ 详情卡 ════════
+const sheet=document.getElementById("sheet");
+const FL=[
+  {label:"低",  color:"#2e7d32", note:"地势相对安全，无主要洪泛区记录"},
+  {label:"中低·需留意", color:"#d9a400", note:"附近有溪流/低洼段，个别街道可能位于洪水规划区"},
+  {label:"中高", color:"#e07b1f", note:"临近河道洪泛区或有内涝历史，选房时务必核查具体地块"},
+  {label:"高",  color:"#d0342c", note:"位于主要洪泛区，保险费高且转售受影响，强烈建议查洪水报告"},
+];
+const GROW=["","谨慎","一般偏弱","稳健","较高","很高"];
+function stars(g){ let h='<span class="stars">';
+  for(let i=1;i<=5;i++) h+=`<span${i>g?' class="off"':''}>★</span>`;
+  return h+"</span>"; }
+function badge(text,color,outline){
+  const b=document.createElement("span"); b.className="badge"+(outline?" outline":"");
+  b.style.background=color; if(outline){b.style.color=color;b.style.border="1.5px solid "+color;}
+  b.textContent=text; return b;
+}
+function safetyOf(v){
+  if(v===null) return {label:"见备注", color:"#e07b1f"};
+  if(v<500)  return {label:"治安 优", color:"#2e7d32"};
+  if(v<750)  return {label:"治安 良", color:"#5aa832"};
+  if(v<1050) return {label:"治安 中等", color:"#d9a400"};
+  if(v<1400) return {label:"治安 中偏高", color:"#e07b1f"};
+  return {label:"犯罪率偏高", color:"#d0342c"};
+}
+
+// 外链打开（App 接管后清理 about:blank 空白页）
+const extWins=[];
+function sweepExtWins(){
+  for(let i=extWins.length-1;i>=0;i--){
+    const w=extWins[i]; let remove=false;
+    if(w.closed){ remove=true; }
+    else { try{ if(w.location.href==="about:blank"){ w.close(); remove=true; } }
+           catch(e){ remove=true; } }
+    if(remove) extWins.splice(i,1);
+  }
+}
+["pageshow","focus"].forEach(ev=>window.addEventListener(ev,sweepExtWins));
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) sweepExtWins(); });
+function openExt(url){
+  const w=window.open(url,"_blank");
+  if(!w){ location.href=url; return; }
+  extWins.push(w);
+  setTimeout(sweepExtWins,3000); setTimeout(sweepExtWins,10000);
+}
+window.openExt=openExt;
+
+function growthDrivers(s){
+  const d=[];
+  if(s.tod===1) d.push("TOD 加速重划区（车站周边高密度化，政府主导）");
+  if(s.tod===2) d.push("TOD 政策区（车站 400 米内放宽密度限制）");
+  const fut=s.ln.filter(k=>!LINES[k].open);
+  for(const k of fut) d.push(`${LINES[k].name}（${LINES[k].year} 年）通车预期带动`);
+  if(s.gd) d.push(s.gd);
+  if(!d.length) d.push(s.g>=4?"成熟高需求区域":"成熟区域，走势大致跟随大盘");
+  if(s.fl>=3) d.push("⚠ 洪水风险压制长期涨幅与保险成本");
+  return d;
+}
+
+function showSheet(s){
+  const L0=LINES[s.ln[0]], G=LGAS[s.lga], fl=FL[s.fl];
+  document.getElementById("sAccent").style.background=L0.color;
+  document.getElementById("sName").textContent=s.zh;
+  document.getElementById("sEn").textContent=`${s.en} · ${s.sub} · NSW ${s.pc}`;
+  const badges=document.getElementById("sBadges"); badges.innerHTML="";
+  for(const k of s.ln) badges.appendChild(badge(LINES[k].name,LINES[k].color));
+  badges.appendChild(badge(G.name,"#555",true));
+  const allFuture=s.ln.every(k=>!LINES[k].open);
+  if(allFuture) badges.appendChild(badge("未通车 · "+LINES[s.ln[0]].year+" 年","#8e8e93"));
+
+  let html=`<div class="cbdCard"><div class="icon">🏙</div><div>
+      <div class="k">乘车至市中心 · CENTRAL / CBD</div>
+      <div class="v">${s.t===0?"位于市中心":`约 ${s.t} 分钟`}${allFuture?' <small>（通车后预估）</small>':''}</div></div></div>`;
+
+  // ① 海拔 & 洪水
+  html+=`<div class="duo">
+    <div class="cell"><div class="k">⛰ 海拔高度（约）</div>
+      <div class="v">${s.el}<small> 米 AHD</small></div></div>
+    <div class="cell"><div class="k">🌊 洪水风险</div>
+      <div class="v"><span class="flBadge" style="background:${fl.color}">${fl.label}</span></div></div>
+  </div>`;
+  html+=`<div class="flNote">💡 ${s.fn ? s.fn+"。" : fl.note+"。"}${s.fl>=1?" 购买前请向 Council 索取地块的 <b>10.7 规划证书</b> 与洪水信息。":""}</div>`;
+
+  // ② 升值潜力
+  const drv=growthDrivers(s);
+  html+=`<div class="lgaCard">
+    <div class="lh">📈 升值潜力评估</div>
+    <div class="lgaRow"><span class="ic">⭐️</span><span class="k">综合评级</span>
+      <span class="v">${stars(s.g)} <b>${GROW[s.g]}</b></span></div>
+    <div class="lgaRow"><span class="ic">🚀</span><span class="k">驱动因素</span>
+      <span class="v">${drv.join("<br>")}</span></div>
+    <div class="lgaRow"><span class="ic">🏘</span><span class="k">区域房价</span>
+      <span class="v">独立屋中位 $${(G.mh/1000).toFixed(2).replace(/\.?0+$/,"")}M · 公寓中位 $${G.mu}k <small>（${G.name.split(" ")[0]} 全区约值）</small></span></div>
+  </div>`;
+
+  // ③ Council 税务 / 持有成本
+  html+=`<div class="lgaCard">
+    <div class="lh">🏛 持有成本 · COUNCIL 费率</div>
+    <div class="lgaRow"><span class="ic">💸</span><span class="k">市政费</span>
+      <span class="v">约 $${G.rates.toLocaleString()}/年 <small>（${G.name.split(" ")[0]} 平均住宅费率，按土地估值计征）</small></span></div>
+    <div class="lgaRow"><span class="ic">🚰</span><span class="k">水费</span>
+      <span class="v">Sydney Water 固定费约 $1,200/年 <small>+ 用量</small></span></div>
+    <div class="lgaRow"><span class="ic">🏢</span><span class="k">公寓注意</span>
+      <span class="v">另有物业管理费（strata），普遍 $700–2,500/季，电梯泳池楼更高</span></span></div>
+    <div class="lgaRow"><span class="ic">📋</span><span class="k">土地税</span>
+      <span class="v">自住免征；投资房土地价值超 $1.075M 部分 1.6%<small>（2025 门槛，外籍另有附加税）</small></span></div>
+  </div>`;
+
+  // ④ 区域画像
+  const sf=safetyOf(G.v);
+  const vsAvg = G.v===null ? "" :
+    (G.v<NSW_AVG.v ? `较全州平均低 ${Math.round((1-G.v/NSW_AVG.v)*100)}%`
+                   : `较全州平均高 ${Math.round((G.v/NSW_AVG.v-1)*100)}%`);
+  const crimeV = G.v===null
+    ? `<small>${G.vNote}</small>`
+    : `<span class="safeBadge" style="background:${sf.color}">${sf.label}</span>
+       暴力案件率 ${G.v}/10万 <small>· ${vsAvg} · 财产类 ${G.p}/10万</small>`;
+  html+=`<div class="lgaCard">
+    <div class="lh">📊 区域画像 · ${G.name} · 邮编 ${s.pc}</div>
+    <div class="lgaRow"><span class="ic">🛡</span><span class="k">治安水平</span><span class="v">${crimeV}</span></div>
+    <div class="lgaRow"><span class="ic">💰</span><span class="k">收入水平</span>
+      <span class="v">家庭周收入中位数 $${G.income.toLocaleString()} <small>· 全澳中位 $1,746</small></span></div>
+    <div class="lgaRow"><span class="ic">🎓</span><span class="k">教育程度</span>
+      <span class="v">本科及以上 ${G.edu}% <small>· 全澳 26.3%</small></span></div>
+    <div class="lgaRow"><span class="ic">🌏</span><span class="k">族裔构成</span><span class="v">${G.eth}</span></div>
+    <div class="lgaRow"><span class="ic">🗣</span><span class="k">常用外语</span><span class="v">${G.lang}</span></div>
+  </div>`;
+
+  // ⑤ 外部链接
+  const slug=s.sub.toLowerCase().replace(/ /g,"+");
+  const buyUrl=`https://www.realestate.com.au/buy/in-${slug},+nsw+${s.pc}/map-1`;
+  const soldUrl=`https://www.realestate.com.au/sold/in-${slug},+nsw+${s.pc}/list-1`;
+  const gq=encodeURIComponent(`${s.en} Station, NSW ${s.pc}, Australia`);
+  const gUrl=`https://www.google.com/maps/search/?api=1&query=${gq}`;
+  html+=`<a class="reaBtn" href="${buyUrl}" target="_blank" rel="noopener"
+      onclick="event.preventDefault();event.stopPropagation();openExt(this.href);return false;">
+      <span class="ri">🏠</span><span class="rt"><span class="t1">在售房源地图 · ${s.sub}</span>
+      <span class="t2">realestate.com.au · 全部在售 · 地图模式</span></span><span class="ra">↗</span></a>
+    <a class="reaBtn sold" href="${soldUrl}" target="_blank" rel="noopener"
+      onclick="event.preventDefault();event.stopPropagation();openExt(this.href);return false;">
+      <span class="ri">📜</span><span class="rt"><span class="t1">近期成交价 · ${s.sub}</span>
+      <span class="t2">查实际成交，判断挂牌价水分</span></span><span class="ra">↗</span></a>
+    <a class="reaBtn gmap" href="${gUrl}" target="_blank" rel="noopener">
+      <span class="ri">📍</span><span class="rt"><span class="t1">车站位置 · Google 地图</span>
+      <span class="t2">查看街景、坡度与周边配套</span></span><span class="ra">↗</span></a>`;
+
+  document.getElementById("sBody").innerHTML=html;
+  document.getElementById("sFoot").textContent =
+    "海拔为站点周边约值(AHD)；洪水分级为基于河流洪泛区与内涝历史的粗略参考，具体地块以 Council 10.7 证书与洪水研究为准；升值评级为综合基建/规划的主观参考，不构成投资建议；费率与房价中位数为约值。数据：BOCSAR 2025.4–2026.3 · ABS 2021 普查 · 各 Council 官网。";
+  sheet.classList.add("show");
+}
+document.getElementById("closeSheet").onclick=()=>sheet.classList.remove("show");
+svg.addEventListener("click",()=>{ if(!dragMoved) sheet.classList.remove("show"); });
+
+// ════════ 缩放 / 平移 ════════
+const VB={x:0,y:0,w:815,h:870};
+let vb={...VB};
+function apply(){
+  svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  svg.dataset.z = vb.w<=280 ? "2" : (vb.w<=540 ? "1" : "0");
+}
+function zoomAt(f,cx,cy){
+  const nw=Math.min(Math.max(vb.w*f,90),1700), nh=nw*(VB.h/VB.w);
+  vb.x=cx-(cx-vb.x)*(nw/vb.w); vb.y=cy-(cy-vb.y)*(nh/vb.h);
+  vb.w=nw; vb.h=nh; apply();
+}
+function pt(cx,cy){ const r=svg.getBoundingClientRect();
+  return {x:vb.x+(cx-r.left)/r.width*vb.w, y:vb.y+(cy-r.top)/r.height*vb.h}; }
+document.getElementById("zin").onclick=()=>zoomAt(0.72,vb.x+vb.w/2,vb.y+vb.h/2);
+document.getElementById("zout").onclick=()=>zoomAt(1.38,vb.x+vb.w/2,vb.y+vb.h/2);
+document.getElementById("zreset").onclick=()=>{vb={...VB};apply();};
+svg.addEventListener("wheel",e=>{e.preventDefault();
+  const p=pt(e.clientX,e.clientY); zoomAt(e.deltaY>0?1.12:0.9,p.x,p.y);},{passive:false});
+
+let drag=null,pinch=null,dragMoved=false;
+svg.addEventListener("pointerdown",e=>{dragMoved=false;drag={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y};});
+svg.addEventListener("pointermove",e=>{
+  if(!drag||pinch)return;
+  if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>6) dragMoved=true;
+  const r=svg.getBoundingClientRect();
+  vb.x=drag.vx-(e.clientX-drag.x)/r.width*vb.w;
+  vb.y=drag.vy-(e.clientY-drag.y)/r.height*vb.h; apply();
+});
+window.addEventListener("pointerup",()=>drag=null);
+svg.addEventListener("touchstart",e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                       e.touches[0].clientY-e.touches[1].clientY);
+    pinch={d,w:vb.w,cx:(e.touches[0].clientX+e.touches[1].clientX)/2,
+           cy:(e.touches[0].clientY+e.touches[1].clientY)/2};
+  }
+},{passive:true});
+svg.addEventListener("touchmove",e=>{
+  if(pinch&&e.touches.length===2){
+    e.preventDefault();
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+                       e.touches[0].clientY-e.touches[1].clientY);
+    const c=pt(pinch.cx,pinch.cy);
+    const nw=Math.min(Math.max(pinch.w*(pinch.d/d),90),1700);
+    vb.x=c.x-(c.x-vb.x)*(nw/vb.w); vb.y=c.y-(c.y-vb.y)*(nw*(VB.h/VB.w)/vb.h);
+    vb.w=nw; vb.h=nw*(VB.h/VB.w); apply();
+  }
+},{passive:false});
+svg.addEventListener("touchend",e=>{if(e.touches.length<2)pinch=null;},{passive:true});
+apply();
+
+// 直达链接：#s=站点id → 定位并打开详情
+{
+  const m=location.hash.match(/s=([a-z0-9]+)/);
+  if(m){ const s=$id(m[1]); if(s){ focusStation(s); showSheet(s); } }
+}
+
+</script>
+</body>
+</html>
