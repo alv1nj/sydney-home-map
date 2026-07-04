@@ -188,9 +188,25 @@
 
   .stn { cursor:pointer; }
   /* 缩放分级标签：p1/p2 随缩放出现；中文小字仅深度缩放时显示 */
-  svg[data-z="0"] text.p1, svg[data-z="0"] text.p2 { display:none; }
-  svg[data-z="1"] text.p2 { display:none; }
+  svg[data-z="0"] .p1, svg[data-z="0"] .p2 { display:none; }
+  svg[data-z="1"] .p2 { display:none; }
   svg:not([data-z="2"]) .zh2 { display:none; }
+
+  /* ── 行程规划 ── */
+  #map.navOn .dimmable { opacity:.28; transition:opacity .25s; }
+  #navBar {
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    z-index:24; border-radius:16px; padding:9px 36px 9px 15px;
+    display:none; max-width:min(92%, 430px);
+  }
+  #navBar.show { display:block; }
+  #navBar .t1 { font-size:13px; font-weight:800; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  #navBar .t2 { font-size:10.5px; color:var(--ink2); margin-top:2.5px; line-height:1.5; }
+  #navBar .warn { color:#8a5514; }
+  #navBar #navClose { position:absolute; right:8px; top:8px; border:none;
+    background:rgba(0,0,0,.07); width:22px; height:22px; border-radius:50%;
+    font-size:10px; color:var(--ink2); font-weight:700; }
 </style>
 </head>
 <body>
@@ -215,6 +231,8 @@
       <input id="searchInput" type="search" placeholder="搜索站点 / 郊区…" autocomplete="off">
       <div id="searchRes"></div>
     </div>
+
+    <div id="navBar" class="glass"></div>
 
     <div id="zoomCtrl" class="glass">
       <button id="zin">＋</button>
@@ -244,7 +262,21 @@
 // ════════ 投影 ════════
 const PX = lo => (lo-150.63)*1162+18;
 const PY = la => (-33.56-la)*1400+16;
-for(const s of STATIONS){ s.x=PX(s.lo); s.y=PY(s.la);
+// 局部放大变形（地铁示意图惯例：密集区画得比真实比例大，站距拉开）
+const WARPS=[
+  {x:PX(151.200), y:PY(-33.880), a:1.30, r:50},
+];
+function warp(x,y){
+  let nx=x, ny=y;
+  for(const w of WARPS){
+    const dx=x-w.x, dy=y-w.y, r=Math.hypot(dx,dy);
+    if(r<0.001) continue;
+    const k=w.a*Math.exp(-(r*r)/(w.r*w.r));
+    nx+=dx*k; ny+=dy*k;
+  }
+  return [nx,ny];
+}
+for(const s of STATIONS){ [s.x,s.y]=warp(PX(s.lo),PY(s.la));
   if(s.p===undefined) s.p = s.hub?0:2; if(!s.g) s.g=3; }
 
 const svg = document.getElementById("map");
@@ -272,7 +304,7 @@ const f=el("filter",{id:"softShadow",x:"-40%",y:"-40%",width:"180%",height:"180%
 el("feDropShadow",{dx:"0",dy:"1.2",stdDeviation:"1.6","flood-opacity":"0.3"},f);
 const gWater = el("g",{});
 for(const w of WATER){
-  const pts=w.pts.map(p=>[PX(p[1]),PY(p[0])]);
+  const pts=w.pts.map(p=>warp(PX(p[1]),PY(p[0])));
   if(w.kind==="fill"){
     el("path",{d:roundedPath(pts,20)+"Z",fill:"#bcd9e8",opacity:"0.55",stroke:"none"},gWater);
   } else {
@@ -281,13 +313,14 @@ for(const w of WATER){
   }
 }
 for(const wl of WATER_LABELS){
-  const t=el("text",{x:PX(wl.lo),y:PY(wl.la),"font-size":"9",fill:"#5b8aa6",
+  const [wlx,wly]=warp(PX(wl.lo),PY(wl.la));
+  const t=el("text",{x:wlx,y:wly,"font-size":"9",fill:"#5b8aa6",
     "font-style":"italic",opacity:"0.85"},gWater);
   t.textContent=wl.text;
 }
 
 // ════════ 线路 ════════
-const gLines = el("g",{});
+const gLines = el("g",{class:"dimmable"});
 for(const rk in ROUTES){
   const lk = ROUTE_LINE[rk] || rk;
   const L = LINES[lk];
@@ -315,28 +348,84 @@ for(const tg of YEAR_TAGS){
 }
 
 // ════════ 站点 ════════
-const gStns = el("g",{});
+// 标签自动避让布局（东京/北京地铁图风格：水平文字，每站在 8 个方位中选不重叠的位置）
+// 高优先级(p0/枢纽)先占位；全部标签互不重叠 → 任何缩放级别的可见子集也不重叠
+function stnR(s){ return s.hub?4.6 : (s.ln.every(k=>LINES[k].lr)?2.3:3); }
+function labelDims(s){
+  const fs = s.hub?6.8 : (s.p===2?4.7:5.5);
+  const zfs = fs*0.74;
+  const w = Math.max(s.en.length*fs*0.56, s.zh.length*zfs*1.02)+1.6;
+  const h = fs + zfs*1.15 + 1.0;
+  return {fs,zfs,w,h};
+}
+const LPAD=0.7, obst=[];
+function lblHit(b){ for(const o of obst){
+  if(b.x0-LPAD<o.x1 && b.x1+LPAD>o.x0 && b.y0-LPAD<o.y1 && b.y1+LPAD>o.y0) return true; } return false; }
+function lblOverlap(b){ let a=0; for(const o of obst){
+  const w=Math.min(b.x1,o.x1)-Math.max(b.x0,o.x0), h=Math.min(b.y1,o.y1)-Math.max(b.y0,o.y0);
+  if(w>0&&h>0) a+=w*h; } return a; }
+// 站点圆点与年份标签先登记为障碍
+for(const s of STATIONS){ const r=stnR(s)+0.8;
+  obst.push({x0:s.x-r,y0:s.y-r,x1:s.x+r,y1:s.y+r}); }
+for(const tg of YEAR_TAGS){ const st=$id(ROUTES[tg.rk][tg.idx]);
+  obst.push({x0:st.x-17,y0:st.y+tg.dy-9,x1:st.x+17,y1:st.y+tg.dy+6}); }
+
+const LPOS={};
+for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
+  const {w,h}=labelDims(s), r=stnR(s);
+  let best=null, bestA=Infinity, ring=0;
+  for(const [ri,d] of [r+2.0, r+5.0, r+8.5].entries()){
+    const dd=d-0.2;
+    const cands=[
+      {a:"start", x:s.x+d,  b:[s.x+d,      s.y-h/2 ]},   // 东
+      {a:"end",   x:s.x-d,  b:[s.x-d-w,    s.y-h/2 ]},   // 西
+      {a:"start", x:s.x+dd, b:[s.x+dd,     s.y-dd-h]},   // 东北
+      {a:"start", x:s.x+dd, b:[s.x+dd,     s.y+dd  ]},   // 东南
+      {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y-dd-h]},   // 西北
+      {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y+dd  ]},   // 西南
+      {a:"middle",x:s.x,    b:[s.x-w/2,    s.y-d-h ]},   // 北
+      {a:"middle",x:s.x,    b:[s.x-w/2,    s.y+d   ]},   // 南
+    ];
+    for(const c of cands){
+      const box={x0:c.b[0],y0:c.b[1],x1:c.b[0]+w,y1:c.b[1]+h};
+      if(!lblHit(box)){ best={a:c.a,x:c.x,box,ring:ri}; bestA=0; break; }
+      const a=lblOverlap(box);
+      if(a<bestA){ bestA=a; best={a:c.a,x:c.x,box,ring:ri}; }
+    }
+    if(bestA===0) break;
+  }
+  obst.push(best.box);
+  LPOS[s.id]=best;
+}
+
+const gStns = el("g",{class:"dimmable"});
 for(const s of STATIONS){
   const g=el("g",{class:"stn"},gStns);
   const multi=s.ln.length>1;
   const L0=LINES[s.ln[0]];
   const allFuture=s.ln.every(k=>!LINES[k].open);
-  const lrOnly=s.ln.every(k=>LINES[k].lr);
-  const r = s.hub?4.6 : (lrOnly?2.3:3);
+  const r = stnR(s);
   el("circle",{cx:s.x,cy:s.y,r,fill:"#fff",
     stroke:multi?"#26262a":L0.color,"stroke-width":s.hub?1.9:1.6,
     filter:s.hub?"url(#softShadow)":"none",
     ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
   if(s.hub) el("circle",{cx:s.x,cy:s.y,r:1.9,fill:multi?"#26262a":L0.color},g);
-  // 45° 斜排标签（平行斜排互不重叠）：英文为主 + 中文小字
-  const t=el("text",{x:s.x+6,y:s.y+2.2,"font-size":s.hub?"7":"5.8",class:"p"+s.p,
-    transform:`rotate(-45 ${s.x} ${s.y})`,
-    fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
-    stroke:"rgba(247,246,242,.92)","stroke-width":s.hub?"2.6":"2.2"},g);
+  // 水平两行标签：英文为主，中文小字在下（深度缩放显示）
+  const P=LPOS[s.id], {fs,zfs}=labelDims(s);
+  if(P.ring>=2){ // 标签被挤远时画引导线
+    const lx=Math.max(P.box.x0,Math.min(s.x,P.box.x1));
+    const ly=Math.max(P.box.y0,Math.min(s.y,P.box.y1));
+    el("line",{x1:s.x,y1:s.y,x2:lx,y2:ly,stroke:"#a5a5ab",
+      "stroke-width":"0.5",class:"p"+s.p},g);
+  }
+  const t=el("text",{x:P.x, y:P.box.y0+fs*0.92, "font-size":fs, class:"p"+s.p,
+    "text-anchor":P.a, fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
+    stroke:"rgba(247,246,242,.93)","stroke-width":s.hub?"2.4":"2.0"},g);
   t.textContent=s.en;
-  const ts=el("tspan",{dx:"3","font-size":s.hub?"5":"4.6",fill:"#8e8e93",class:"zh2"},t);
+  const ts=el("tspan",{x:P.x, dy:zfs*1.28, "font-size":zfs, fill:"#8e8e93",
+    class:"zh2","stroke-width":"1.5","font-weight":"500"},t);
   ts.textContent=s.zh;
-  g.addEventListener("click",ev=>{ev.stopPropagation(); if(!dragMoved) showSheet(s);});
+  g.addEventListener("click",ev=>{ev.stopPropagation(); if(!dragMoved) stnTap(s);});
 }
 
 // ════════ 图例 ════════
@@ -350,7 +439,7 @@ const legend=document.getElementById("legend");
              :`<span class="swd" style="border-color:${L.color}"></span>`)+
       L.name+(L.open?"":`<span class="yr" style="background:${L.color}">${L.year}</span>`)+`</div>`;
   }
-  h += `<div class="note">实线=已通车 · 虚线=在建。点击站点查看<b>海拔·洪水风险·升值潜力·Council 费率</b>等购房参考。放大地图可显示更多站名。走向与停站为示意。<br>
+  h += `<div class="note">实线=已通车 · 虚线=在建。点击站点查看<b>海拔·洪水风险·升值潜力·Council 费率</b>等购房参考。<b>连点两个站</b>可规划换乘路线与时间；双击空白放大，双击后按住上下拖动连续缩放。放大地图可显示更多站名。走向与停站为示意。<br>
   找租房？用姊妹工具 <a href="https://sydney-metro-rent.pages.dev" target="_blank" rel="noopener">悉尼 Metro 租房助手 ↗</a></div>`;
   legend.innerHTML=h;
 }
@@ -537,7 +626,138 @@ function showSheet(s){
   sheet.classList.add("show");
 }
 document.getElementById("closeSheet").onclick=()=>sheet.classList.remove("show");
-svg.addEventListener("click",()=>{ if(!dragMoved) sheet.classList.remove("show"); });
+svg.addEventListener("click",()=>{ if(!dragMoved){ sheet.classList.remove("show"); clearNav(); } });
+
+// ════════ 行程规划（点两站 · Dijkstra 含换乘） ════════
+const gNav = el("g",{"pointer-events":"none"});
+const navBar = document.getElementById("navBar");
+const XFER_MIN = 4;                       // 换乘惩罚(分)
+function edgeMin(a,b,lk){                 // 区间行车时间估算(分)
+  const km=Math.hypot((a.lo-b.lo)*92.5,(a.la-b.la)*111.1);
+  const spd = LINES[lk].lr?16 : (lk[0]==="M"?45:42);
+  return Math.max(1, km/spd*60);
+}
+const ADJ={}, STL={};                     // 状态图: "站id|线路" ；STL: 站→线路集合
+function addE(k1,k2,w,kind,line,t){       // w=寻路权重 t=真实分钟
+  (ADJ[k1]=ADJ[k1]||[]).push({to:k2,w,kind,line,t});
+  (ADJ[k2]=ADJ[k2]||[]).push({to:k1,w,kind,line,t});
+}
+{
+  for(const rk in ROUTES){
+    const lk=ROUTE_LINE[rk]||rk, arr=ROUTES[rk];
+    const fut=LINES[lk].open?1:1.3;       // 未通车线路降权：现有线路能到就优先现有
+    for(let i=0;i<arr.length-1;i++){
+      const a=$id(arr[i]), b=$id(arr[i+1]), m=edgeMin(a,b,lk);
+      addE(a.id+"|"+lk, b.id+"|"+lk, m*fut, "ride", lk, m);
+    }
+  }
+  for(const k in ADJ){ const i=k.indexOf("|");
+    (STL[k.slice(0,i)]=STL[k.slice(0,i)]||new Set()).add(k.slice(i+1)); }
+  for(const id in STL){
+    const ls=[...STL[id]];
+    for(let i=0;i<ls.length;i++) for(let j=i+1;j<ls.length;j++)
+      addE(id+"|"+ls[i], id+"|"+ls[j], XFER_MIN, "xfer", null);
+  }
+  for(const l of STL["mpl"]) addE("hun|MW","mpl|"+l, 7, "walk", null); // Hunter St↔Martin Pl 步行
+}
+function dijkstra(o,dst){
+  const dist={},prev={},pe={},Q=new Set(Object.keys(ADJ));
+  for(const k of Q) dist[k]=Infinity;
+  for(const l of STL[o.id]) dist[o.id+"|"+l]=0;
+  while(Q.size){
+    let u=null,du=Infinity;
+    for(const k of Q){ if(dist[k]<du){du=dist[k];u=k;} }
+    if(u===null) break;
+    Q.delete(u);
+    for(const e of ADJ[u]){ const nd=du+e.w;
+      if(nd<dist[e.to]){ dist[e.to]=nd; prev[e.to]=u; pe[e.to]=e; } }
+  }
+  let bk=null,bd=Infinity;
+  for(const l of STL[dst.id]){ const k=dst.id+"|"+l;
+    if(dist[k]<bd){ bd=dist[k]; bk=k; } }
+  if(bk===null||bd===Infinity) return null;
+  const edges=[]; let k=bk;
+  while(prev[k]!==undefined){ edges.unshift({e:pe[k],from:prev[k],to:k}); k=prev[k]; }
+  return {min:bd, edges};
+}
+function buildLegs(edges){
+  const legs=[];
+  for(const ed of edges){
+    const fid=ed.from.slice(0,ed.from.indexOf("|")), tid=ed.to.slice(0,ed.to.indexOf("|"));
+    if(ed.e.kind==="ride"){
+      const last=legs[legs.length-1];
+      if(last&&last.kind==="ride"&&last.line===ed.e.line&&last.sts[last.sts.length-1].id===fid)
+        last.sts.push($id(tid));
+      else legs.push({kind:"ride",line:ed.e.line,sts:[$id(fid),$id(tid)]});
+    } else if(ed.e.kind==="walk"){
+      legs.push({kind:"walk",sts:[$id(fid),$id(tid)]});
+    }
+  }
+  return legs;
+}
+let nav={o:null,route:null};
+function navMsg(html){
+  navBar.innerHTML=html+`<button id="navClose">✕</button>`;
+  navBar.classList.add("show");
+  document.getElementById("navClose").onclick=ev=>{ev.stopPropagation();clearNav();};
+}
+function clearNav(){
+  if(!nav.o&&!nav.route) return;
+  nav={o:null,route:null}; gNav.innerHTML="";
+  navBar.classList.remove("show"); svg.classList.remove("navOn");
+}
+function markPin(s,color,txt){
+  const g=el("g",{filter:"url(#softShadow)"},gNav);
+  el("circle",{cx:s.x,cy:s.y-9,r:6.2,fill:color,stroke:"#fff","stroke-width":"1.6"},g);
+  el("path",{d:`M${s.x-2.6},${s.y-4.4} L${s.x},${s.y-0.4} L${s.x+2.6},${s.y-4.4} Z`,fill:color},g);
+  const t=el("text",{x:s.x,y:s.y-6.7,"text-anchor":"middle","font-size":"6.2",
+    fill:"#fff","font-weight":"800"},g);
+  t.textContent=txt;
+}
+function drawRoute(rt,dst){
+  gNav.innerHTML="";
+  for(const leg of buildLegs(rt.edges)){
+    if(leg.kind==="walk"){
+      el("path",{d:roundedPath(leg.sts.map(s=>[s.x,s.y]),8),fill:"none",stroke:"#555",
+        "stroke-width":"2.4","stroke-dasharray":"3 3","stroke-linecap":"round"},gNav);
+      continue;
+    }
+    const off=ROUTE_OFF[leg.line]||[0,0];
+    const d=roundedPath(leg.sts.map(s=>[s.x+off[0],s.y+off[1]]),8);
+    el("path",{d,fill:"none",stroke:"#fff","stroke-width":"9",
+      "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.92"},gNav);
+    el("path",{d,fill:"none",stroke:LINES[leg.line].color,"stroke-width":"5.2",
+      "stroke-linecap":"round","stroke-linejoin":"round"},gNav);
+    for(const s of leg.sts)
+      el("circle",{cx:s.x+off[0],cy:s.y+off[1],r:2,fill:"#fff",
+        stroke:"#26262a","stroke-width":"1.1"},gNav);
+  }
+  markPin(nav.o,"#1d4fa8","起"); markPin(dst,"#d0342c","终");
+}
+function setDest(s){
+  const rt=dijkstra(nav.o,s);
+  if(!rt){ navMsg(`<div class="t1">😕 未能规划出路线</div>`); return; }
+  nav.route=rt;
+  drawRoute(rt,s); svg.classList.add("navOn"); sheet.classList.remove("show");
+  const legs=buildLegs(rt.edges);
+  const trueMin=rt.edges.reduce((a,ed)=>a+(ed.e.t??ed.e.w),0);
+  const nx=rt.edges.filter(e=>e.e.kind!=="ride").length;
+  const seq=legs.map(l=>l.kind==="walk" ? `<b style="color:#555">步行</b>`
+    : `<b style="color:${LINES[l.line].color}">${l.line}</b> ${l.sts.length-1}站`)
+    .join(`<span style="opacity:.45"> › </span>`);
+  const fut=[...new Set(legs.filter(l=>l.kind==="ride"&&!LINES[l.line].open)
+    .map(l=>`${LINES[l.line].name}（${LINES[l.line].year}）`))];
+  navMsg(`<div class="t1">${nav.o.zh} → ${s.zh} · 约 ${Math.round(trueMin)} 分钟</div>
+    <div class="t2">${seq} · 换乘 ${nx} 次 · 时间为估算</div>`
+    +(fut.length?`<div class="t2 warn">⚠ 途经未通车线路：${fut.join("、")}</div>`:""));
+}
+function stnTap(s){
+  if(nav.o && !nav.route && s.id!==nav.o.id){ setDest(s); return; }
+  clearNav(); nav.o=s;
+  navMsg(`<div class="t1">🧭 起点：${s.zh} ${s.en}</div>
+    <div class="t2">再点另一站设为终点 · 点空白处取消</div>`);
+  showSheet(s);
+}
 
 // ════════ 缩放 / 平移 ════════
 const VB={x:0,y:0,w:815,h:870};
@@ -546,8 +766,9 @@ function apply(){
   svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.dataset.z = vb.w<=280 ? "2" : (vb.w<=540 ? "1" : "0");
 }
+const ZMIN=55, ZMAX=1700;
 function zoomAt(f,cx,cy){
-  const nw=Math.min(Math.max(vb.w*f,90),1700), nh=nw*(VB.h/VB.w);
+  const nw=Math.min(Math.max(vb.w*f,ZMIN),ZMAX), nh=nw*(VB.h/VB.w);
   vb.x=cx-(cx-vb.x)*(nw/vb.w); vb.y=cy-(cy-vb.y)*(nh/vb.h);
   vb.w=nw; vb.h=nh; apply();
 }
@@ -559,16 +780,48 @@ document.getElementById("zreset").onclick=()=>{vb={...VB};apply();};
 svg.addEventListener("wheel",e=>{e.preventDefault();
   const p=pt(e.clientX,e.clientY); zoomAt(e.deltaY>0?1.12:0.9,p.x,p.y);},{passive:false});
 
-let drag=null,pinch=null,dragMoved=false;
-svg.addEventListener("pointerdown",e=>{dragMoved=false;drag={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y};});
+// 双击空白 = 放大；双击后第二指不松开、上下拖动 = 连续缩放（上=放大 下=缩小）
+let drag=null,pinch=null,dragMoved=false,dtz=null,lastTap={t:-1e4,x:0,y:0};
+svg.addEventListener("pointerdown",e=>{
+  dragMoved=false;
+  const now=performance.now();
+  const onStn=e.target.closest && e.target.closest(".stn");
+  if(!onStn && !pinch && now-lastTap.t<350 &&
+     Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<32){
+    const r=svg.getBoundingClientRect();
+    dtz={y0:e.clientY, w0:vb.w, moved:false, px:pt(e.clientX,e.clientY),
+         rx:(e.clientX-r.left)/r.width, ry:(e.clientY-r.top)/r.height};
+    lastTap={t:-1e4,x:0,y:0};
+    return;
+  }
+  lastTap={t:now,x:e.clientX,y:e.clientY};
+  drag={x:e.clientX,y:e.clientY,vx:vb.x,vy:vb.y};
+});
 svg.addEventListener("pointermove",e=>{
+  if(dtz){
+    const dy=e.clientY-dtz.y0;
+    if(Math.abs(dy)>5) dtz.moved=true;
+    if(dtz.moved){
+      dragMoved=true;
+      const nw=Math.min(Math.max(dtz.w0*Math.exp(dy/160),ZMIN),ZMAX), nh=nw*(VB.h/VB.w);
+      vb.x=dtz.px.x-dtz.rx*nw; vb.y=dtz.px.y-dtz.ry*nh;
+      vb.w=nw; vb.h=nh; apply();
+    }
+    return;
+  }
   if(!drag||pinch)return;
   if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>6) dragMoved=true;
   const r=svg.getBoundingClientRect();
   vb.x=drag.vx-(e.clientX-drag.x)/r.width*vb.w;
   vb.y=drag.vy-(e.clientY-drag.y)/r.height*vb.h; apply();
 });
-window.addEventListener("pointerup",()=>drag=null);
+window.addEventListener("pointerup",()=>{
+  if(dtz){
+    if(!dtz.moved) zoomAt(0.55,dtz.px.x,dtz.px.y);   // 纯双击 → 放大一级
+    dragMoved=true; dtz=null;
+  }
+  drag=null;
+});
 svg.addEventListener("touchstart",e=>{
   if(e.touches.length===2){
     const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
@@ -583,7 +836,7 @@ svg.addEventListener("touchmove",e=>{
     const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
                        e.touches[0].clientY-e.touches[1].clientY);
     const c=pt(pinch.cx,pinch.cy);
-    const nw=Math.min(Math.max(pinch.w*(pinch.d/d),90),1700);
+    const nw=Math.min(Math.max(pinch.w*(pinch.d/d),ZMIN),ZMAX);
     vb.x=c.x-(c.x-vb.x)*(nw/vb.w); vb.y=c.y-(c.y-vb.y)*(nw*(VB.h/VB.w)/vb.h);
     vb.w=nw; vb.h=nw*(VB.h/VB.w); apply();
   }
