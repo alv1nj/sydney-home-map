@@ -187,10 +187,11 @@
     font-size:13px; color:var(--ink2); font-weight:700; }
 
   .stn { cursor:pointer; }
-  /* 缩放分级标签：p1/p2 随缩放出现；中文小字仅深度缩放时显示 */
-  svg[data-z="0"] .p1, svg[data-z="0"] .p2 { display:none; }
-  svg[data-z="1"] .p2 { display:none; }
-  svg:not([data-z="2"]) .zh2 { display:none; }
+  /* 缩放分级标签：p1/p2 随缩放出现；p3=避让失败降级(深缩放才显示)；中文小字 z2 起显示 */
+  svg[data-z="0"] .p1, svg[data-z="0"] .p2, svg[data-z="0"] .p3,
+  svg[data-z="1"] .p2, svg[data-z="1"] .p3,
+  svg[data-z="2"] .p3 { display:none; }
+  svg[data-z="0"] .zh2, svg[data-z="1"] .zh2 { display:none; }
 
   /* ── 行程规划 ── */
   #map.navOn .dimmable { opacity:.28; transition:opacity .25s; }
@@ -360,7 +361,7 @@ for(const tg of YEAR_TAGS){
 function stnR(s){ return s.hub?5 : (s.ln.length>1?3.4 : (s.ln.every(k=>LINES[k].lr)?2.3:2.8)); }
 function labelDims(s,sc){
   sc = sc || s._lsc || 1;
-  const fs = (s.hub?6.8 : (s.p===2?4.7:5.5))*sc;
+  const fs = (s.hub?7.2 : (s.p===2?5.0:5.9))*sc;
   const zfs = fs*0.74;
   const w = Math.max(s.en.length*fs*0.56, s.zh.length*zfs*1.02)+1.6;
   const h = fs + zfs*1.15 + 1.0;
@@ -388,7 +389,7 @@ for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
   for(const sc of [1, 0.85, 0.72]){
     const {w,h}=labelDims(s,sc);
     bestA=Infinity;
-    for(const [ri,d] of [r+2.0, r+5.0, r+8.5].entries()){
+    for(const [ri,d] of [r+2.0, r+5.0, r+8.5, r+12.5].entries()){
       const dd=d-0.2;
       const cands=[
         {a:"start", x:s.x+d,  b:[s.x+d,      s.y-h/2 ]},   // 东
@@ -411,6 +412,8 @@ for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
     s._lsc=sc;
     if(bestA===0) break;
   }
+  // 所有方位/字号都放不下 → 非枢纽站降级为 p3（深缩放才显示，届时反向缩放已消除重叠）
+  if(bestA>0 && !s.hub) s._p3=true;
   obst.push(best.box);
   LPOS[s.id]=best;
 }
@@ -430,13 +433,14 @@ for(const s of STATIONS){
     ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
   // 水平两行标签：英文为主，中文小字在下（深度缩放显示）
   const P=LPOS[s.id], {fs,zfs}=labelDims(s);
+  const pcls = s._p3 ? "p3" : "p"+s.p;
   if(P.ring>=2){ // 标签被挤远时画引导线
     const lx=Math.max(P.box.x0,Math.min(s.x,P.box.x1));
     const ly=Math.max(P.box.y0,Math.min(s.y,P.box.y1));
     el("line",{x1:s.x,y1:s.y,x2:lx,y2:ly,stroke:"#a5a5ab",
-      "stroke-width":"0.5",class:"p"+s.p},g);
+      "stroke-width":"0.5",class:pcls},g);
   }
-  const t=el("text",{x:P.x, y:P.box.y0+fs*0.92, "font-size":fs, class:"p"+s.p,
+  const t=el("text",{x:P.x, y:P.box.y0+fs*0.92, "font-size":fs, class:pcls,
     "text-anchor":P.a, fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
     stroke:"rgba(247,246,242,.93)","stroke-width":s.hub?"2.4":"2.0"},g);
   t.textContent=s.en;
@@ -820,7 +824,7 @@ const VB={x:0,y:-6,w:900*K,h:1236*K};
 let vb={...VB};
 // 反向缩放（北京地铁风格）：深度放大时站点符号/文字/年份牌保持屏幕恒定大小，
 // 只有线路几何被拉开 → 越放大越清爽，不会挤成一团
-const LSREF=260;
+const LSREF=340;
 let curLS=-1;
 function applyLS(force){
   const ls=Math.min(1, vb.w/LSREF);
@@ -837,7 +841,7 @@ function applyLS(force){
 }
 function apply(){
   svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
-  svg.dataset.z = vb.w<=280 ? "2" : (vb.w<=540 ? "1" : "0");
+  svg.dataset.z = vb.w<=170 ? "3" : (vb.w<=340 ? "2" : (vb.w<=620 ? "1" : "0"));
   applyLS(false);
 }
 const ZMIN=55, ZMAX=1700;
