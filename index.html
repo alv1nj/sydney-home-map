@@ -161,6 +161,7 @@
   .lgaRow .k { flex:none; width:78px; color:var(--ink2); font-weight:600; font-size:11px; }
   .lgaRow .v { flex:1; font-weight:600; line-height:1.5; }
   .lgaRow .v small { color:var(--ink2); font-weight:500; }
+  .lgaRow .v a { color:var(--blue); font-weight:700; text-decoration:none; }
   .safeBadge { font-size:10.5px; font-weight:800; color:#fff; border-radius:8px;
     padding:1.5px 8px; margin-right:6px; white-space:nowrap; }
   .stars { color:#e8a30f; letter-spacing:2px; font-size:13px; }
@@ -589,6 +590,19 @@ function showSheet(s){
       <span class="v">${drv.join("<br>")}</span></div>
     <div class="lgaRow"><span class="ic">🏘</span><span class="k">区域房价</span>
       <span class="v">独立屋中位 $${(G.mh/1000).toFixed(2).replace(/\.?0+$/,"")}M · 公寓中位 $${G.mu}k <small>（${G.name.split(" ")[0]} 全区约值）</small></span></div>
+    <div class="lgaRow"><span class="ic">💵</span><span class="k">租金回报</span>
+      <span class="v">公寓毛回报约 ${G.y}%/年 <small>· 全区约值，兼顾出租的话越高越好，具体以同街区租金比价</small></span></div>
+  </div>`;
+
+  // ②b 学区教育
+  html+=`<div class="lgaCard">
+    <div class="lh">🏫 学区 · 教育资源</div>
+    <div class="lgaRow"><span class="ic">🎓</span><span class="k">学区亮点</span>
+      <span class="v">${s.sch || G.sch}</span></div>
+    <div class="lgaRow"><span class="ic">🔎</span><span class="k">划片查询</span>
+      <span class="v"><a href="https://education.nsw.gov.au/school-finder"
+        onclick="event.preventDefault();openExt(this.href);return false;">NSW School Finder ↗</a>
+        <small>输入具体地址查公立中小学划片，精英中学全州统考不限学区</small></span></div>
   </div>`;
 
   // ③ Council 税务 / 持有成本
@@ -602,6 +616,28 @@ function showSheet(s){
       <span class="v">另有物业管理费（strata），普遍 $700–2,500/季，电梯泳池楼更高</span></span></div>
     <div class="lgaRow"><span class="ic">📋</span><span class="k">土地税</span>
       <span class="v">自住免征；投资房土地价值超 $1.075M 部分 1.6%<small>（2025 门槛，外籍另有附加税）</small></span></div>
+  </div>`;
+
+  // ③b 尽调提示（噪音/山火/公寓质量为站点专属标注；验房/规划为通用要点）
+  const AN={1:"偶有航线经过：对噪音敏感建议不同时段现场感受，可查官方 Flight Path 噪音地图",
+            2:"位于机场主航道影响区：起降时段噪音明显，务必早晚不同时段踩点再决定",
+            3:"西悉尼机场启用后新增航线，噪音影响待观察，购前查 EIS 航线图"};
+  const BF={1:"临近丛林边缘：查 Council 的 Bushfire Prone Land 地图，保险费或略高",
+            2:"毗邻国家公园/丛林带：BAL 等级影响建筑要求与保险，务必核查"};
+  const APT={1:"新公寓供应量大：议价空间大但短期升值承压；查建商记录与缺陷报告",
+             2:"高密度新盘集中区（业内有缺陷楼前例）：查建商口碑、Strata 维修记录与 iCIRT 星级"};
+  const ddRow=(ic,k,v)=>`<div class="lgaRow"><span class="ic">${ic}</span><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  let dd="";
+  if(s.an) dd+=ddRow("✈️","飞机噪音",AN[s.an]);
+  if(s.bf) dd+=ddRow("🔥","山火风险",BF[s.bf]);
+  if(s.apt) dd+=ddRow("🏗","公寓质量",APT[s.apt]);
+  if(G.mu<=800) dd+=ddRow("🎁","首置优惠",`公寓中位 $${G.mu}k 在 NSW 首置印花税<b>全免线（$80万）</b>内，自住首购可省数万`);
+  else if(G.mu<=1000) dd+=ddRow("🎁","首置优惠",`公寓中位 $${G.mu}k 在首置印花税<b>减免区间（$80–100万）</b>`);
+  html+=`<div class="lgaCard">
+    <div class="lh">🧭 尽调提示 · DUE DILIGENCE</div>
+    ${ddRow("🔍","验房查档","独立屋做 Building + Pest 检验；公寓请律师审 Strata 报告（维修史 / 诉讼 / 偿债基金余额）")}
+    ${ddRow("🏙","周边规划","上 Council 官网查邻近 DA 开发申请，防新楼挡采光景观；TOD 区留意未来高密度化")}
+    ${dd}
   </div>`;
 
   // ④ 区域画像
@@ -644,7 +680,7 @@ function showSheet(s){
 
   document.getElementById("sBody").innerHTML=html;
   document.getElementById("sFoot").textContent =
-    "海拔为站点周边约值(AHD)；洪水分级为基于河流洪泛区与内涝历史的粗略参考，具体地块以 Council 10.7 证书与洪水研究为准；升值评级为综合基建/规划的主观参考，不构成投资建议；费率与房价中位数为约值。数据：BOCSAR 2025.4–2026.3 · ABS 2021 普查 · 各 Council 官网。";
+    "海拔为站点周边约值(AHD)；洪水/山火/噪音分级为常识性粗略参考，具体地块以 Council 10.7 证书、洪水研究与官方噪音图为准；升值评级与租金回报为主观约值参考，不构成投资建议；学区信息可能随划片调整，以 School Finder 为准；费率与房价中位数为约值。数据：BOCSAR 2025.4–2026.3 · ABS 2021 普查 · 各 Council 官网。";
   sheet.classList.add("show");
 }
 document.getElementById("closeSheet").onclick=()=>sheet.classList.remove("show");
