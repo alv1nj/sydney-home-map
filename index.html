@@ -261,6 +261,12 @@
 <script>
 "use strict";
 // ════════ 概示图坐标（东京地铁风格：八向直线+圆角，坐标见 schematic.js） ════════
+// K：全图紧凑系数（等比缩放保持45°角；标签字号不变→地图更紧凑）
+const K=0.82;
+for(const id in SXY) SXY[id]=[SXY[id][0]*K, SXY[id][1]*K];
+for(const rk in BENDS) for(const id in BENDS[rk])
+  BENDS[rk][id]=BENDS[rk][id].map(b=>[b[0]*K, b[1]*K]);
+for(const b of BADGES){ b[1]*=K; b[2]*=K; }
 for(const s of STATIONS){ [s.x,s.y]=SXY[s.id];
   if(s.p===undefined) s.p = s.hub?0:2; if(!s.g) s.g=3; }
 
@@ -289,12 +295,12 @@ const defs=el("defs",{});
 const f=el("filter",{id:"softShadow",x:"-40%",y:"-40%",width:"180%",height:"180%"},defs);
 el("feDropShadow",{dx:"0",dy:"1.2",stdDeviation:"1.6","flood-opacity":"0.3"},f);
 const gWater = el("g",{});
-el("rect",{x:520,y:449,width:296,height:13,rx:6.5,fill:"#cfe3f0",opacity:"0.85"},gWater);
-el("ellipse",{cx:854,cy:726,rx:40,ry:22,fill:"#cfe3f0",opacity:"0.7"},gWater);
+el("rect",{x:520*K,y:449*K,width:296*K,height:12,rx:6,fill:"#cfe3f0",opacity:"0.85"},gWater);
+el("ellipse",{cx:854*K,cy:726*K,rx:40*K,ry:22*K,fill:"#cfe3f0",opacity:"0.7"},gWater);
 {
-  const t1=el("text",{x:530,y:445,"font-size":"8.5",fill:"#7da7c4","font-style":"italic"},gWater);
+  const t1=el("text",{x:530*K,y:449*K-4,"font-size":"8.5",fill:"#7da7c4","font-style":"italic"},gWater);
   t1.textContent="Sydney Harbour";
-  const t2=el("text",{x:854,y:728,"font-size":"7.5",fill:"#7da7c4","font-style":"italic",
+  const t2=el("text",{x:854*K,y:726*K+2,"font-size":"7.5",fill:"#7da7c4","font-style":"italic",
     "text-anchor":"middle"},gWater);
   t2.textContent="Botany Bay";
 }
@@ -810,7 +816,7 @@ function stnTap(s){
 }
 
 // ════════ 缩放 / 平移 ════════
-const VB={x:0,y:-6,w:900,h:1236};
+const VB={x:0,y:-6,w:900*K,h:1236*K};
 let vb={...VB};
 // 反向缩放（北京地铁风格）：深度放大时站点符号/文字/年份牌保持屏幕恒定大小，
 // 只有线路几何被拉开 → 越放大越清爽，不会挤成一团
