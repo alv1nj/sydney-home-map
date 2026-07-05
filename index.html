@@ -690,15 +690,15 @@ svg.addEventListener("click",()=>{ if(!dragMoved){ sheet.classList.remove("show"
 const gNav = el("g",{"pointer-events":"none"});
 const navBar = document.getElementById("navBar");
 const XFER_MIN = 4;                       // 换乘惩罚(分)
+function edgeKm(a,b){ return Math.hypot((a.lo-b.lo)*92.5,(a.la-b.la)*111.1); }
 function edgeMin(a,b,lk){                 // 区间行车时间估算(分)
-  const km=Math.hypot((a.lo-b.lo)*92.5,(a.la-b.la)*111.1);
   const spd = LINES[lk].lr?16 : (lk[0]==="M"?45:42);
-  return Math.max(1, km/spd*60);
+  return Math.max(1, edgeKm(a,b)/spd*60);
 }
 const ADJ={}, STL={};                     // 状态图: "站id|线路" ；STL: 站→线路集合
-function addE(k1,k2,w,kind,line,t){       // w=寻路权重 t=真实分钟
-  (ADJ[k1]=ADJ[k1]||[]).push({to:k2,w,kind,line,t});
-  (ADJ[k2]=ADJ[k2]||[]).push({to:k1,w,kind,line,t});
+function addE(k1,k2,w,kind,line,t,km){    // w=寻路权重 t=真实分钟 km=区间距离
+  (ADJ[k1]=ADJ[k1]||[]).push({to:k2,w,kind,line,t,km});
+  (ADJ[k2]=ADJ[k2]||[]).push({to:k1,w,kind,line,t,km});
 }
 {
   // 仅用已通车线路建换乘图：未通车线路不参与换乘
@@ -707,7 +707,7 @@ function addE(k1,k2,w,kind,line,t){       // w=寻路权重 t=真实分钟
     if(!LINES[lk].open) continue;
     for(let i=0;i<arr.length-1;i++){
       const a=$id(arr[i]), b=$id(arr[i+1]), m=edgeMin(a,b,lk);
-      addE(a.id+"|"+lk, b.id+"|"+lk, m, "ride", lk, m);
+      addE(a.id+"|"+lk, b.id+"|"+lk, m, "ride", lk, m, edgeKm(a,b));
     }
   }
   for(const k in ADJ){ const i=k.indexOf("|");
@@ -752,6 +752,31 @@ function buildLegs(edges){
     }
   }
   return legs;
+}
+// ── Opal 票价（成人，2026 约值）：轨道按距离分档，非高峰约7折；轻轨独立计费+$2换乘抵扣 ──
+const FARE_RAIL=[[10,4.30,3.01],[20,5.34,3.74],[35,6.14,4.30],[65,8.22,5.75],[1e9,10.57,7.40]];
+const FARE_LR  =[[3,3.28,2.30],[8,4.24,2.97],[1e9,5.44,3.81]];
+function bandFare(tbl,km){ for(const [mx,pk,off] of tbl) if(km<=mx) return [pk,off]; }
+function fareFor(rt){
+  let railKm=0, lrKm=0, sw=0, lastMode=null;
+  for(const ed of rt.edges){
+    if(ed.e.kind!=="ride") continue;
+    const mode=LINES[ed.e.line].lr?"lr":"rail";
+    if(mode==="lr") lrKm+=ed.e.km; else railKm+=ed.e.km;
+    if(lastMode&&lastMode!==mode) sw++;
+    lastMode=mode;
+  }
+  let pk=0, off=0;
+  if(railKm>0){ const f=bandFare(FARE_RAIL,railKm); pk+=f[0]; off+=f[1]; }
+  if(lrKm>0){ const f=bandFare(FARE_LR,lrKm); pk+=f[0]; off+=f[1]; }
+  const disc=sw*2;
+  return { pk:Math.max(0,pk-disc), off:Math.max(0,off-disc), mixed:sw>0 };
+}
+function isPeakNow(){   // 高峰=工作日 6:30–10:00 与 15:00–19:00（公共假期无法自动识别）
+  const n=new Date(), d=n.getDay();
+  if(d===0||d===6) return false;
+  const m=n.getHours()*60+n.getMinutes();
+  return (m>=390&&m<600)||(m>=900&&m<1140);
 }
 let nav={o:null,route:null};
 function navMsg(html){
@@ -842,8 +867,15 @@ function setDest(s){
     .join(`<span style="opacity:.45"> › </span>`);
   const fut=[...new Set(legs.filter(l=>l.kind==="ride"&&!LINES[l.line].open)
     .map(l=>`${LINES[l.line].name}（${LINES[l.line].year}）`))];
+  const f=fareFor(rt), pkNow=isPeakNow();
+  const hl='style="color:#1d4fa8"', dim='style="opacity:.75;font-weight:500"';
   navMsg(`<div class="t1">${nav.o.zh} → ${s.zh} · 约 ${Math.round(trueMin)} 分钟</div>
-    <div class="t2">${seq} · 换乘 ${nx} 次 · 时间为估算</div>`
+    <div class="t2">${seq} · 换乘 ${nx} 次 · 时间为估算</div>
+    <div class="t2">💳 Opal 成人约
+      <b ${pkNow?hl:dim}>高峰 $${f.pk.toFixed(2)}</b> ·
+      <b ${pkNow?dim:hl}>非高峰 $${f.off.toFixed(2)}</b>${f.mixed?" <small>(含轻轨换乘$2抵扣)</small>":""}
+      <small>· 当前${pkNow?"高峰":"非高峰"}</small></div>
+    <div class="t2" style="opacity:.8">高峰=工作日 6:30–10 & 15–19 按刷卡上车时间；周末/公共假期全天非高峰，当日封顶约 $9.4（工作日约 $18.7）</div>`
     +(fut.length?`<div class="t2 warn">⚠ 途经未通车线路：${fut.join("、")}</div>`:""));
 }
 function stnTap(s){
