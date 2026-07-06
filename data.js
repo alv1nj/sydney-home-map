@@ -3,9 +3,9 @@
 // open: 是否已通车  year: 预计通车  dash: 虚线  w: 线宽档 (2粗=地铁/城铁主干 1=轻轨)
 const LINES = {
   M1:  { name:"M1 地铁 西北 & 城市线", color:"#168388", open:true },
-  MSW: { name:"M1 地铁 西南延伸段", color:"#168388", open:false, year:"2026", note:"悉登汉姆—宾士镇改造中，预计 2026 年通车" },
-  MA:  { name:"西悉尼机场线", color:"#ee6b22", open:false, year:"2027", note:"配合西悉尼国际机场启用，预计 2027 年" },
-  MW:  { name:"Metro West", color:"#7d3fe0", open:false, year:"2032", note:"帕拉马塔—CBD 快线，预计 2032 年" },
+  MSW: { name:"M1 地铁 西南延伸段（巴士替代改造中）", color:"#ef7bb1", open:false, year:"2026", note:"悉登汉姆—宾士镇改造中，预计 2026 年通车" },
+  MA:  { name:"西悉尼机场线", color:"#9fa0a6", open:false, year:"2027", note:"配合西悉尼国际机场启用，预计 2027 年" },
+  MW:  { name:"Metro West", color:"#9fa0a6", open:false, year:"2032", note:"帕拉马塔—CBD 快线，预计 2032 年" },
   T1:  { name:"T1 北岸 & 西线", color:"#f99d1c", open:true },
   T2:  { name:"T2 莱平顿 & 内西线", color:"#0098cd", open:true },
   T3:  { name:"T3 利物浦 & 内西线", color:"#f37021", open:true },
@@ -24,7 +24,7 @@ const LINES = {
 const ROUTE_LINE = { T1R:"T1", T4W:"T4", CC:"T2" };
 // 平行走廊错位偏移（概示图坐标系；同走廊线路呈东京式并行条带）
 const ROUTE_OFF = { T1:[0,-5], T2:[0,-1.7], T3:[2.2,1.7], T5:[-2.2,5],
-                    T6:[-2.6,-2.2], T1R:[0,0], T9:[0,0], CC:[0,-1.7] };
+                    T6:[-2.6,-2.2], T1R:[0,0], T9:[0,0], CC:[0,-1.7], L3:[2.5,0] };
 
 // ════════ 行政区(Council)数据 ════════
 // v/p: BOCSAR 暴力/财产类案件率(每10万人, 2025.4–2026.3约值)  income: 家庭周收入中位数

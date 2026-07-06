@@ -85,9 +85,9 @@ const STATIONS = [
 {id:"mac",zh:"麦克唐纳镇",en:"Macdonaldtown",la:-33.8970,lo:151.1870,sub:"Erskineville",pc:2043,lga:"sydney",el:25,fl:0,t:6,ln:["T2"]},
 {id:"red",zh:"雷德芬",en:"Redfern",la:-33.8920,lo:151.1990,sub:"Redfern",pc:2016,lga:"sydney",el:25,fl:0,t:3,ln:["T1","T2","T3","T4","T8"],g:4,gd:"Tech Central 科技区旁",hub:1,p:1},
 // ── 市区环线 & 北岸 ──
-{id:"twn",zh:"市政厅",en:"Town Hall",la:-33.8730,lo:151.2070,sub:"Sydney",pc:2000,lga:"sydney",el:15,fl:0,t:2,ln:["T1","T2","T3","T4","T8"],hub:1,p:2},
-{id:"wyn",zh:"温亚",en:"Wynyard",la:-33.8660,lo:151.2060,sub:"Sydney",pc:2000,lga:"sydney",el:15,fl:0,t:3,ln:["T1","T2","T3","T8"],hub:1,p:2},
-{id:"cqy",zh:"环形码头",en:"Circular Quay",la:-33.8610,lo:151.2110,sub:"Sydney",pc:2000,lga:"sydney",el:5,fl:1,fn:"海滨，极端风暴潮需留意",t:5,ln:["T2","T3","T8"],p:2},
+{id:"twn",zh:"市政厅",en:"Town Hall",la:-33.8730,lo:151.2070,sub:"Sydney",pc:2000,lga:"sydney",el:15,fl:0,t:2,ln:["T1","T2","T3","T4","T8","L2","L3"],hub:1,p:2},
+{id:"wyn",zh:"温亚",en:"Wynyard",la:-33.8660,lo:151.2060,sub:"Sydney",pc:2000,lga:"sydney",el:15,fl:0,t:3,ln:["T1","T2","T3","T8","L2","L3"],hub:1,p:2},
+{id:"cqy",zh:"环形码头",en:"Circular Quay",la:-33.8610,lo:151.2110,sub:"Sydney",pc:2000,lga:"sydney",el:5,fl:1,fn:"海滨，极端风暴潮需留意",t:5,ln:["T2","T3","T8","L2","L3"],p:2},
 {id:"stj",zh:"圣詹姆斯",en:"St James",la:-33.8700,lo:151.2120,sub:"Sydney",pc:2000,lga:"sydney",el:30,fl:0,t:4,ln:["T2","T3","T8"]},
 {id:"mus",zh:"博物馆",en:"Museum",la:-33.8760,lo:151.2110,sub:"Sydney",pc:2000,lga:"sydney",el:35,fl:0,t:3,ln:["T2","T3","T8"]},
 {id:"mil",zh:"米尔森角",en:"Milsons Point",la:-33.8460,lo:151.2120,sub:"Milsons Point",pc:2061,lga:"northsyd",el:30,fl:0,t:8,ln:["T1"]},
@@ -241,6 +241,32 @@ const STATIONS = [
 {id:"dun",zh:"邓达斯",en:"Dundas",la:-33.8030,lo:151.0320,sub:"Dundas",pc:2117,lga:"parramatta",el:25,fl:1,fn:"溪谷局部",t:38,ln:["L4"]},
 {id:"tel",zh:"特洛皮亚",en:"Telopea",la:-33.7940,lo:151.0370,sub:"Telopea",pc:2117,lga:"parramatta",el:60,fl:0,t:41,ln:["L4"],g:4,gd:"特洛皮亚重建总体规划区",sch:"近 James Ruse 与 Carlingford 学区带"},
 {id:"cgf",zh:"卡林福德",en:"Carlingford",la:-33.7820,lo:151.0480,sub:"Carlingford",pc:2118,lga:"parramatta",el:105,fl:0,t:45,ln:["L4"],g:4,gd:"轻轨终点+传统学区",p:1,sch:"James Ruse(全州第一精英)就在本区,学区房溢价高"},
+// ── L1 达令港段 (2026-07-06 补全) ──
+{id:"csq",zh:"国会广场",en:"Capitol Square",la:-33.8798,lo:151.2055,sub:"Haymarket",pc:2000,lga:"sydney",el:15,fl:0,t:2,ln:["L1"]},
+{id:"pdm",zh:"帕迪市场",en:"Paddy's Markets",la:-33.8781,lo:151.2043,sub:"Haymarket",pc:2000,lga:"sydney",el:10,fl:1,fn:"达令港低地",t:4,ln:["L1"]},
+{id:"exc",zh:"会展中心",en:"Exhibition Centre",la:-33.8754,lo:151.2012,sub:"Darling Harbour",pc:2000,lga:"sydney",el:5,fl:1,fn:"达令港填海低地",t:5,ln:["L1"]},
+{id:"cvn",zh:"会议中心",en:"Convention",la:-33.8730,lo:151.2000,sub:"Darling Harbour",pc:2000,lga:"sydney",el:5,fl:1,t:7,ln:["L1"]},
+{id:"pyb",zh:"派蒙湾",en:"Pyrmont Bay",la:-33.8696,lo:151.1946,sub:"Pyrmont",pc:2009,lga:"sydney",el:5,fl:1,t:9,ln:["L1"]},
+{id:"tst",zh:"星港城",en:"The Star",la:-33.8676,lo:151.1948,sub:"Pyrmont",pc:2009,lga:"sydney",el:10,fl:0,t:10,ln:["L1"]},
+{id:"jss",zh:"约翰街广场",en:"John Street Square",la:-33.8659,lo:151.1930,sub:"Pyrmont",pc:2009,lga:"sydney",el:15,fl:0,t:11,ln:["L1"]},
+{id:"fsh",zh:"鱼市场",en:"Fish Market",la:-33.8665,lo:151.1893,sub:"Pyrmont",pc:2009,lga:"sydney",el:5,fl:1,fn:"新鱼市场重建区滨水",t:12,ln:["L1"]},
+{id:"wwp",zh:"温特沃斯公园",en:"Wentworth Park",la:-33.8746,lo:151.1926,sub:"Glebe",pc:2037,lga:"sydney",el:5,fl:1,fn:"公园低地",t:13,ln:["L1"]},
+// ── L2/L3 乔治街 CBD 段 ──
+{id:"brs",zh:"桥街",en:"Bridge Street",la:-33.8643,lo:151.2090,sub:"Sydney",pc:2000,lga:"sydney",el:10,fl:0,t:4,ln:["L2","L3"]},
+{id:"qvb",zh:"维多利亚女王大厦",en:"QVB",la:-33.8716,lo:151.2065,sub:"Sydney",pc:2000,lga:"sydney",el:20,fl:0,t:3,ln:["L2","L3"]},
+{id:"cht",zh:"唐人街",en:"Chinatown",la:-33.8778,lo:151.2052,sub:"Haymarket",pc:2000,lga:"sydney",el:15,fl:0,t:2,ln:["L2","L3"]},
+{id:"hym",zh:"干草市场",en:"Haymarket",la:-33.8805,lo:151.2049,sub:"Haymarket",pc:2000,lga:"sydney",el:15,fl:0,t:1,ln:["L2","L3"]},
+// ── L2 东段补站 ──
+{id:"wsr",zh:"万西路",en:"Wansey Road",la:-33.9110,lo:151.2368,sub:"Randwick",pc:2031,lga:"randwick",el:30,fl:0,t:17,ln:["L2"]},
+{id:"uhs",zh:"新南威尔士大学高街",en:"UNSW High Street",la:-33.9163,lo:151.2352,sub:"Randwick",pc:2031,lga:"randwick",el:45,fl:0,t:19,ln:["L2"]},
+// ── L4 帕拉马塔段补站 ──
+{id:"chw",zh:"儿童医院",en:"Children's Hospital",la:-33.8021,lo:150.9893,sub:"Westmead",pc:2145,lga:"parramatta",el:25,fl:1,fn:"图恩加比溪支流",t:26,ln:["L4"]},
+{id:"cbh",zh:"坎伯兰医院",en:"Cumberland Hospital",la:-33.8040,lo:150.9958,sub:"North Parramatta",pc:2151,lga:"parramatta",el:15,fl:2,fn:"帕河北岸低地",t:27,ln:["L4"]},
+{id:"fnl",zh:"芬内尔街",en:"Fennell Street",la:-33.8052,lo:151.0016,sub:"North Parramatta",pc:2151,lga:"parramatta",el:15,fl:2,fn:"帕河沿岸",t:28,ln:["L4"]},
+{id:"pas",zh:"阿尔弗雷德王子广场",en:"Prince Alfred Square",la:-33.8089,lo:151.0035,sub:"Parramatta",pc:2150,lga:"parramatta",el:10,fl:2,fn:"帕河CBD段有洪水历史",t:23,ln:["L4"]},
+{id:"chu",zh:"教堂街",en:"Church Street",la:-33.8125,lo:151.0043,sub:"Parramatta",pc:2150,lga:"parramatta",el:10,fl:2,t:22,ln:["L4"]},
+{id:"twa",zh:"电车道大街",en:"Tramway Avenue",la:-33.8196,lo:151.0096,sub:"Rosehill",pc:2142,lga:"parramatta",el:8,fl:2,fn:"帕河南岸",t:26,ln:["L4"]},
+{id:"rbt",zh:"罗宾·托马斯",en:"Robin Thomas",la:-33.8176,lo:151.0142,sub:"Rosehill",pc:2142,lga:"parramatta",el:8,fl:2,t:28,ln:["L4"]},
 ];
 
 // ════════ 线路走向（几何顺序，含仅路过不停靠的点） ════════
@@ -253,7 +279,7 @@ const ROUTES = {
   T1R: ["bla","mry","qkh","sch","riv","vin","mul","win","cla","erm","ric"],
   T9:  ["hor","nor","thl","pnt","bee","che","epp","eas","den","wry","mdb","rho","ccw","ns","str"],
   T2:  ["cen","red","mac","new","sta","pet","lew","sum","ash","cro","bur","str","hom","fle","lid","aub","cly","gra","mer","gui","yen","fai","cnv","cab","waf","liv","csl","glf","edp","lep"],
-  T3:  ["cen","red","mac","new","sta","pet","lew","sum","ash","cro","bur","str","hom","fle","lid","brl","rgp","sef","chh","lef","vil","crm","cab"],
+  T3:  ["cen","red","mac","new","sta","pet","lew","sum","ash","cro","bur","str","hom","fle","lid","brl","rgp","sef","chh","lef","vil","crm","cab","waf","liv"],
   T6:  ["lid","brl","rgp","bir","yag","bank"],
   T5:  ["ric","erm","cla","win","mul","vin","riv","sch","qkh","mry","bla","svh","too","pdh","wnt","wm","par","hpk","gra","mer","gui","yen","fai","cnv","cab","waf","liv","csl","glf","edp","lep"],
   T4:  ["bon","edg","kcx","mpl","twn","cen","red","ers","stp","syd","tem","wlc","arn","bks","roc","kog","cal","alw","hur","pns","mor","oat","com","jan","sut","kir","gym","mir","crb","wlw","crn"],
@@ -261,8 +287,8 @@ const ROUTES = {
   T8:  ["cen","gsq","msc","dom","intl","wlc","trl","bwp","bxn","kgv","bvh","nrw","rvw","pad","rev","pan","ehl","hol","glf","mqf","ing","min","leu","cbt","mca"],
   T7:  ["lid","olp"],
   CC:  ["cen","mus","stj","cqy","wyn","twn","cen"],
-  L1:  ["cen","gle","jub","rzb","lil","lei","haw","mrn","tav","lww","wtm","arl","dgr","dh"],
-  L2:  ["cen","sur","mop","rrw","ran"],
-  L3:  ["mop","ken","unw","kfd"],
-  L4:  ["wm","par","rsh","cml","rdm","dun","tel","cgf"],
+  L1:  ["cen","csq","pdm","exc","cvn","pyb","tst","jss","fsh","wwp","gle","jub","rzb","lil","lei","haw","mrn","tav","lww","wtm","arl","dgr","dh"],
+  L2:  ["cqy","brs","wyn","qvb","twn","cht","hym","cen","sur","mop","rrw","wsr","uhs","ran"],
+  L3:  ["cqy","brs","wyn","qvb","twn","cht","hym","cen","sur","mop","ken","unw","kfd"],
+  L4:  ["wm","chw","cbh","fnl","pas","chu","par","twa","rbt","rsh","cml","rdm","dun","tel","cgf"],
 };

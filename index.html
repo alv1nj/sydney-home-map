@@ -192,7 +192,6 @@
   svg[data-z="0"] .p1, svg[data-z="0"] .p2, svg[data-z="0"] .p3,
   svg[data-z="1"] .p2, svg[data-z="1"] .p3,
   svg[data-z="2"] .p3 { display:none; }
-  svg[data-z="0"] .zh2, svg[data-z="1"] .zh2 { display:none; }
 
   /* ── 行程规划 ── */
   #map.navOn .dimmable { opacity:.28; transition:opacity .25s; }
@@ -297,6 +296,10 @@ const defs=el("defs",{});
 const f=el("filter",{id:"softShadow",x:"-40%",y:"-40%",width:"180%",height:"180%"},defs);
 el("feDropShadow",{dx:"0",dy:"1.2",stdDeviation:"1.6","flood-opacity":"0.3"},f);
 const gWater = el("g",{});
+el("rect",{x:634*K,y:450*K,width:110*K,height:132*K,rx:9,fill:"#e8e6df"},gWater);
+{ const ct=el("text",{x:742*K,y:462*K,"font-size":"7.5",fill:"#8a8a90",
+    "font-weight":"700","text-anchor":"end","letter-spacing":"1"},gWater);
+  ct.textContent="CITY"; }
 el("rect",{x:520*K,y:449*K,width:296*K,height:12,rx:6,fill:"#cfe3f0",opacity:"0.85"},gWater);
 el("ellipse",{cx:854*K,cy:726*K,rx:40*K,ry:22*K,fill:"#cfe3f0",opacity:"0.7"},gWater);
 {
@@ -335,9 +338,10 @@ const gBadges = el("g",{class:"dimmable"});
 for(const [lk,bx,by] of BADGES){
   const L=LINES[lk];
   const g=el("g",{},gBadges);
-  el("circle",{cx:bx,cy:by,r:7.5,fill:L.color,stroke:"#fff","stroke-width":"1.3",
-    filter:"url(#softShadow)"},g);
-  const t=el("text",{x:bx,y:by+2.4,"text-anchor":"middle","font-size":"6.6",
+  const bw=lk.length*4.4+9;
+  el("rect",{x:bx-bw/2,y:by-5.5,width:bw,height:11,rx:3,fill:L.color,
+    stroke:"#fff","stroke-width":"1.1",filter:"url(#softShadow)"},g);
+  const t=el("text",{x:bx,y:by+2.5,"text-anchor":"middle","font-size":"6.8",
     fill:"#fff","font-weight":"800","letter-spacing":"0.2"},g);
   t.textContent=lk;
   ANCH.push([g,bx,by]);
@@ -382,8 +386,33 @@ for(const tg of YEAR_TAGS){ const st=$id(ROUTES[tg.rk][tg.idx]);
 for(const [,bx,by] of BADGES)
   obst.push({x0:bx-8.5,y0:by-8.5,x1:bx+8.5,y1:by+8.5});
 
+// 官方风格：水平走廊上的非枢纽站名 45° 斜排（上右方向）
+const NEXTS={};
+for(const rk in ROUTES){ const arr=ROUTES[rk];
+  for(let i=0;i<arr.length;i++){
+    (NEXTS[arr[i]]=NEXTS[arr[i]]||new Set());
+    if(i>0) NEXTS[arr[i]].add(arr[i-1]);
+    if(i<arr.length-1) NEXTS[arr[i]].add(arr[i+1]);
+  } }
+function isRot(s){
+  if(s.hub) return false;
+  const nb=[...(NEXTS[s.id]||[])].map($id).filter(Boolean);
+  if(nb.length<2) return false;
+  return nb.every(n=>Math.abs(n.y-s.y)<=4.5 && Math.abs(n.x-s.x)>=11);
+}
+// 线路终点（官方深色方块标记）
+const TERMS=new Set();
+for(const rk in ROUTES){ if(rk==="CC") continue;
+  const a=ROUTES[rk]; TERMS.add(a[0]); TERMS.add(a[a.length-1]); }
 const LPOS={};
 for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
+  if(isRot(s)){   // 斜排标签：登记斜向障碍带，跳过方位求解
+    const {fs}=labelDims(s,1);
+    const Lw=s.en.length*fs*0.56+4;
+    obst.push({x0:s.x-2,y0:s.y-6-Lw*0.707,x1:s.x+4+Lw*0.707,y1:s.y+1});
+    LPOS[s.id]={rot:true};
+    continue;
+  }
   const r=stnR(s);
   let best=null, bestA=Infinity;
   // 放不下时逐级缩小字号重试（密集小站用更小字，地铁图惯例）
@@ -427,15 +456,27 @@ for(const s of STATIONS){
   const L0=LINES[s.ln[0]];
   const allFuture=s.ln.every(k=>!LINES[k].open);
   const r = stnR(s);
-  // 东京风格站点符号：换乘站=白底黑环大圆；普通站=白底线色小圆
-  el("circle",{cx:s.x,cy:s.y,r,fill:"#fff",
-    stroke:multi?"#26262a":L0.color,"stroke-width":s.hub?2.1:1.6,
-    filter:s.hub?"url(#softShadow)":"none",
-    ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
-  // 水平两行标签：英文为主，中文小字在下（深度缩放显示）
-  const P=LPOS[s.id], {fs,zfs}=labelDims(s);
+  // 官方风格站点符号：普通站=白底深灰描边小圆；换乘=白底黑环大圆；终点=深色方块
+  if(TERMS.has(s.id) && !s.hub){
+    el("rect",{x:s.x-3.2,y:s.y-3.2,width:6.4,height:6.4,rx:1.6,
+      fill:"#26262a",filter:"url(#softShadow)"},g);
+  } else {
+    el("circle",{cx:s.x,cy:s.y,r,fill:"#fff",
+      stroke:s.hub?"#26262a":(multi?"#26262a":"#4a4a52"),
+      "stroke-width":s.hub?2.1:1.2,
+      filter:s.hub?"url(#softShadow)":"none",
+      ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
+  }
+  const P=LPOS[s.id], {fs}=labelDims(s);
   const pcls = s._p3 ? "p3" : "p"+s.p;
-  if(P.ring>=2){ // 标签被挤远时画引导线
+  if(P.rot){   // 官方式 45° 斜排（走廊站）
+    const t=el("text",{x:s.x+3,y:s.y-3,"font-size":fs,class:pcls,
+      transform:`rotate(-45 ${s.x} ${s.y})`,
+      fill:"#26262a","font-weight":"600","paint-order":"stroke",
+      stroke:"rgba(247,246,242,.93)","stroke-width":"2.0"},g);
+    t.textContent=s.en;
+  } else {
+  if(P.ring>=2){
     const lx=Math.max(P.box.x0,Math.min(s.x,P.box.x1));
     const ly=Math.max(P.box.y0,Math.min(s.y,P.box.y1));
     el("line",{x1:s.x,y1:s.y,x2:lx,y2:ly,stroke:"#a5a5ab",
@@ -445,9 +486,7 @@ for(const s of STATIONS){
     "text-anchor":P.a, fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
     stroke:"rgba(247,246,242,.93)","stroke-width":s.hub?"2.4":"2.0"},g);
   t.textContent=s.en;
-  const ts=el("tspan",{x:P.x, dy:zfs*1.28, "font-size":zfs, fill:"#8e8e93",
-    class:"zh2","stroke-width":"1.5","font-weight":"500"},t);
-  ts.textContent=s.zh;
+  }
   g.addEventListener("click",ev=>{ev.stopPropagation(); if(!dragMoved) stnTap(s);});
 }
 
@@ -485,7 +524,7 @@ searchInput.addEventListener("input",()=>{
     ||String(s.pc).startsWith(q)).slice(0,9);
   searchRes.innerHTML=hits.map(s=>`<div class="srItem" data-id="${s.id}">
     <span class="dot" style="background:${LINES[s.ln[0]].color}"></span>
-    <span><span class="n">${s.zh}</span> <span class="e">${s.en}</span></span>
+    <span><span class="n">${s.en}</span> <span class="e">${s.sub}</span></span>
     <span class="lns">${s.ln.join("·")}</span></div>`).join("");
   for(const it of searchRes.querySelectorAll(".srItem")){
     it.onclick=()=>{ const s=$id(it.dataset.id);
@@ -559,8 +598,8 @@ function growthDrivers(s){
 function showSheet(s){
   const L0=LINES[s.ln[0]], G=LGAS[s.lga], fl=FL[s.fl];
   document.getElementById("sAccent").style.background=L0.color;
-  document.getElementById("sName").textContent=s.zh;
-  document.getElementById("sEn").textContent=`${s.en} · ${s.sub} · NSW ${s.pc}`;
+  document.getElementById("sName").textContent=s.en;
+  document.getElementById("sEn").textContent=`${s.sub} · NSW ${s.pc}`;
   const badges=document.getElementById("sBadges"); badges.innerHTML="";
   for(const k of s.ln) badges.appendChild(badge(LINES[k].name,LINES[k].color));
   badges.appendChild(badge(G.name,"#555",true));
@@ -845,11 +884,11 @@ function drawRoute(rt,dst){
 function busNote(st){   // 站点所在线路均未通车时的说明
   if(STL[st.id]) return "";
   const yrs=[...new Set(st.ln.map(k=>`${LINES[k].name}（预计${LINES[k].year}年通车）`))];
-  return `<div class="t2 warn">⚠ ${st.zh} 仅由 ${yrs.join("、")} 服务</div>`;
+  return `<div class="t2 warn">⚠ ${st.en} 仅由 ${yrs.join("、")} 服务</div>`;
 }
 function setDest(s){
   if(!STL[nav.o.id] || !STL[s.id]){
-    navMsg(`<div class="t1">🚌 ${nav.o.zh} → ${s.zh} · 需搭乘 Bus 换乘</div>
+    navMsg(`<div class="t1">🚌 ${nav.o.en} → ${s.en} · 需搭乘 Bus 换乘</div>
       <div class="t2">两站间暂无已通车的轨道交通换乘路线，建议用 Google Maps 查询公交接驳</div>`
       + busNote(nav.o) + busNote(s));
     return;
@@ -869,7 +908,7 @@ function setDest(s){
     .map(l=>`${LINES[l.line].name}（${LINES[l.line].year}）`))];
   const f=fareFor(rt), pkNow=isPeakNow();
   const hl='style="color:#1d4fa8"', dim='style="opacity:.75;font-weight:500"';
-  navMsg(`<div class="t1">${nav.o.zh} → ${s.zh} · 约 ${Math.round(trueMin)} 分钟</div>
+  navMsg(`<div class="t1">${nav.o.en} → ${s.en} · 约 ${Math.round(trueMin)} 分钟</div>
     <div class="t2">${seq} · 换乘 ${nx} 次 · 时间为估算</div>
     <div class="t2">💳 Opal 成人约
       <b ${pkNow?hl:dim}>高峰 $${f.pk.toFixed(2)}</b> ·
@@ -881,7 +920,7 @@ function setDest(s){
 function stnTap(s){
   if(nav.o && !nav.route && s.id!==nav.o.id){ setDest(s); return; }
   clearNav(); nav.o=s;
-  navMsg(`<div class="t1">🧭 起点：${s.zh} ${s.en}</div>
+  navMsg(`<div class="t1">🧭 起点：${s.en}</div>
     <div class="t2">再点另一站设为终点 · 点空白处取消</div>`);
   originFx(s);
   showSheet(s);
