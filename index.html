@@ -8,6 +8,8 @@
 <meta name="theme-color" content="#123c85">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 <meta name="apple-mobile-web-app-title" content="悉尼购房助手">
 <title>悉尼购房助手</title>
 <style>
@@ -55,6 +57,7 @@
       radial-gradient(1200px 800px at 75% 30%, #ffffff 0%, transparent 60%),
       var(--paper); }
   svg#map { width:100%; height:100%; display:block; cursor:grab; }
+  svg#map text { font-family:'Montserrat','Helvetica Neue',Arial,sans-serif; }
 
   .glass {
     background:rgba(255,255,255,.8);
@@ -188,10 +191,7 @@
     font-size:13px; color:var(--ink2); font-weight:700; }
 
   .stn { cursor:pointer; }
-  /* 缩放分级标签：p1/p2 随缩放出现；p3=避让失败降级(深缩放才显示)；中文小字 z2 起显示 */
-  svg[data-z="0"] .p1, svg[data-z="0"] .p2, svg[data-z="0"] .p3,
-  svg[data-z="1"] .p2, svg[data-z="1"] .p3,
-  svg[data-z="2"] .p3 { display:none; }
+  /* 官方海报式：全部站名常显，不随缩放隐藏 */
 
   /* ── 行程规划 ── */
   #map.navOn .dimmable { opacity:.28; transition:opacity .25s; }
@@ -263,7 +263,7 @@
 "use strict";
 // ════════ 概示图坐标（东京地铁风格：八向直线+圆角，坐标见 schematic.js） ════════
 // K：全图紧凑系数（等比缩放保持45°角；标签字号不变→地图更紧凑）
-const K=0.82;
+const K=0.88;
 for(const id in SXY) SXY[id]=[SXY[id][0]*K, SXY[id][1]*K];
 for(const rk in BENDS) for(const id in BENDS[rk])
   BENDS[rk][id]=BENDS[rk][id].map(b=>[b[0]*K, b[1]*K]);
@@ -314,17 +314,28 @@ el("ellipse",{cx:854*K,cy:726*K,rx:40*K,ry:22*K,fill:"#cfe3f0",opacity:"0.7"},gW
 // 反向缩放登记表：BW=按缩放变细的描边  ANCH=围绕锚点整体缩小的组
 const BW=[], ANCH=[], NAVBW=[], NAVANCH=[];
 const gLines = el("g",{class:"dimmable"});
+// 沿线逐点垂直偏移（官方式平行条带；d>0 偏右侧）
+function offPts(pts,d){
+  if(!d) return pts;
+  const n=pts.length,out=[];
+  for(let i=0;i<n;i++){
+    const a=pts[Math.max(0,i-1)], b=pts[Math.min(n-1,i+1)];
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
+    out.push([pts[i][0]+dy/L*d, pts[i][1]-dx/L*d]);
+  }
+  return out;
+}
 for(const rk in ROUTES){
   const lk = ROUTE_LINE[rk] || rk;
   const L = LINES[lk];
-  const off = ROUTE_OFF[rk] || [0,0];
   const bd = BENDS[rk]||{};
-  const pts=[];
+  let pts=[];
   for(const id of ROUTES[rk]){
     const s=$id(id);
-    pts.push([s.x+off[0], s.y+off[1]]);
-    for(const b of (bd[id]||[])) pts.push([b[0]+off[0], b[1]+off[1]]);
+    pts.push([s.x, s.y]);
+    for(const b of (bd[id]||[])) pts.push([b[0], b[1]]);
   }
+  pts=offPts(pts, ROUTE_OFF[rk]||0);
   const d = roundedPath(pts,10);
   const wMain = L.lr ? 2.6 : 4.4;   // 东京风格：干线统一线宽
   BW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.4,
@@ -408,7 +419,7 @@ const LPOS={};
 for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
   if(isRot(s)){   // 斜排标签：登记斜向障碍带，跳过方位求解
     const {fs}=labelDims(s,1);
-    const Lw=s.en.length*fs*0.56+4;
+    const Lw=s.en.length*fs*0.63+4;
     obst.push({x0:s.x-2,y0:s.y-6-Lw*0.707,x1:s.x+4+Lw*0.707,y1:s.y+1});
     LPOS[s.id]={rot:true};
     continue;
@@ -416,7 +427,7 @@ for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
   const r=stnR(s);
   let best=null, bestA=Infinity;
   // 放不下时逐级缩小字号重试（密集小站用更小字，地铁图惯例）
-  for(const sc of [1, 0.85, 0.72]){
+  for(const sc of [1, 0.85, 0.72, 0.62]){
     const {w,h}=labelDims(s,sc);
     bestA=Infinity;
     for(const [ri,d] of [r+2.0, r+5.0, r+8.5, r+12.5].entries()){
@@ -456,12 +467,37 @@ for(const s of STATIONS){
   const L0=LINES[s.ln[0]];
   const allFuture=s.ln.every(k=>!LINES[k].open);
   const r = stnR(s);
-  // 官方风格站点符号：普通站=白底深灰描边小圆；换乘=白底黑环大圆；终点=深色方块
+  // 官方风格站点符号：停靠线在并行条带上的位置连成跨线胶囊；单线=小白点；终点=深色方块
+  const opts=[];   // 该站各停靠线的条带落点
+  for(const rk in ROUTES){
+    const arr=ROUTES[rk], idx=arr.indexOf(s.id);
+    if(idx<0) continue;
+    const lk=ROUTE_LINE[rk]||rk;
+    if(!s.ln.includes(lk)) continue;
+    const dv=ROUTE_OFF[rk]||0;
+    const pa=$id(arr[Math.max(0,idx-1)]), pb=$id(arr[Math.min(arr.length-1,idx+1)]);
+    const dx=pb.x-pa.x, dy=pb.y-pa.y, LL2=Math.hypot(dx,dy)||1;
+    const px=s.x+dy/LL2*dv, py=s.y-dx/LL2*dv;
+    if(!opts.some(p=>Math.hypot(p[0]-px,p[1]-py)<1.2)) opts.push([px,py]);
+  }
+  if(!opts.length) opts.push([s.x,s.y]);
   if(TERMS.has(s.id) && !s.hub){
-    el("rect",{x:s.x-3.2,y:s.y-3.2,width:6.4,height:6.4,rx:1.6,
+    el("rect",{x:opts[0][0]-3.2,y:opts[0][1]-3.2,width:6.4,height:6.4,rx:1.6,
       fill:"#26262a",filter:"url(#softShadow)"},g);
+  } else if(opts.length>1){
+    // 跨线胶囊：一眼看出停靠几条并行线路
+    let e1=opts[0],e2=opts[0],dm=0;
+    for(const a of opts) for(const b of opts){
+      const dd=Math.hypot(a[0]-b[0],a[1]-b[1]);
+      if(dd>dm){dm=dd;e1=a;e2=b;}
+    }
+    const cr=s.hub?3.1:2.2;
+    el("line",{x1:e1[0],y1:e1[1],x2:e2[0],y2:e2[1],stroke:"#26262a",
+      "stroke-width":cr*2+2.2,"stroke-linecap":"round",filter:"url(#softShadow)"},g);
+    el("line",{x1:e1[0],y1:e1[1],x2:e2[0],y2:e2[1],stroke:"#fff",
+      "stroke-width":cr*2,"stroke-linecap":"round"},g);
   } else {
-    el("circle",{cx:s.x,cy:s.y,r,fill:"#fff",
+    el("circle",{cx:opts[0][0],cy:opts[0][1],r,fill:"#fff",
       stroke:s.hub?"#26262a":(multi?"#26262a":"#4a4a52"),
       "stroke-width":s.hub?2.1:1.2,
       filter:s.hub?"url(#softShadow)":"none",
@@ -866,8 +902,7 @@ function drawRoute(rt,dst){
         "stroke-width":"2.4","stroke-dasharray":"3 3","stroke-linecap":"round"},gNav), w:2.4});
       continue;
     }
-    const off=ROUTE_OFF[leg.line]||[0,0];
-    const d=roundedPath(leg.sts.map(s=>[s.x+off[0],s.y+off[1]]),8);
+    const d=roundedPath(offPts(leg.sts.map(s=>[s.x,s.y]), ROUTE_OFF[leg.line]||0),8);
     NAVBW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":"9",
       "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.92"},gNav), w:9});
     NAVBW.push({el:el("path",{d,fill:"none",stroke:LINES[leg.line].color,"stroke-width":"5.2",
