@@ -337,8 +337,8 @@ for(const rk in ROUTES){
   }
   pts=offPts(pts, ROUTE_OFF[rk]||0);
   const d = roundedPath(pts,10);
-  const wMain = L.lr ? 2.6 : 4.4;   // 东京风格：干线统一线宽
-  BW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.4,
+  const wMain = L.lr ? 2.2 : 3.4;   // 官方风格：细线宽+条带间距4
+  BW.push({el:el("path",{d,fill:"none",stroke:"#fff","stroke-width":wMain+2.0,
     "stroke-linecap":"round","stroke-linejoin":"round",opacity:"0.85"},gLines), w:wMain+2.4});
   BW.push({el:el("path",{d,fill:"none",stroke:L.color,"stroke-width":wMain,
     "stroke-linecap":"round","stroke-linejoin":"round",
@@ -383,6 +383,29 @@ function labelDims(s,sc){
   const h = fs + zfs*1.15 + 1.0;
   return {fs,zfs,w,h};
 }
+// 各站停靠线条带落点（供符号绘制与标签锚定）
+function calcOpts(s){
+  const opts=[];
+  for(const rk in ROUTES){
+    const arr=ROUTES[rk];
+    const idx=arr.indexOf(s.id);
+    if(idx<0) continue;
+    const lk=ROUTE_LINE[rk]||rk;
+    if(!s.ln.includes(lk)) continue;
+    const dv=ROUTE_OFF[rk]||0;
+    const pa=$id(arr[Math.max(0,idx-1)]), pb=$id(arr[Math.min(arr.length-1,idx+1)]);
+    const dx=pb.x-pa.x, dy=pb.y-pa.y, LL2=Math.hypot(dx,dy)||1;
+    const px=s.x+dy/LL2*dv, py=s.y-dx/LL2*dv;
+    if(!opts.some(p=>Math.hypot(p[0]-px,p[1]-py)<1.4)) opts.push([px,py]);
+  }
+  if(!opts.length) opts.push([s.x,s.y]);
+  return opts;
+}
+for(const s of STATIONS){
+  s._opts=calcOpts(s);
+  s._px=s._opts.reduce((a,p)=>a+p[0],0)/s._opts.length;
+  s._py=s._opts.reduce((a,p)=>a+p[1],0)/s._opts.length;
+}
 const LPAD=0.7, obst=[];
 function lblHit(b){ for(const o of obst){
   if(b.x0-LPAD<o.x1 && b.x1+LPAD>o.x0 && b.y0-LPAD<o.y1 && b.y1+LPAD>o.y0) return true; } return false; }
@@ -391,7 +414,9 @@ function lblOverlap(b){ let a=0; for(const o of obst){
   if(w>0&&h>0) a+=w*h; } return a; }
 // 站点圆点与年份标签先登记为障碍
 for(const s of STATIONS){ const r=stnR(s)+0.8;
-  obst.push({x0:s.x-r,y0:s.y-r,x1:s.x+r,y1:s.y+r}); }
+  const xs=s._opts.map(p=>p[0]), ys=s._opts.map(p=>p[1]);
+  obst.push({x0:Math.min(...xs)-r,y0:Math.min(...ys)-r,
+             x1:Math.max(...xs)+r,y1:Math.max(...ys)+r}); }
 for(const tg of YEAR_TAGS){ const st=$id(ROUTES[tg.rk][tg.idx]);
   obst.push({x0:st.x-17,y0:st.y+tg.dy-9,x1:st.x+17,y1:st.y+tg.dy+6}); }
 for(const [,bx,by] of BADGES)
@@ -417,11 +442,20 @@ for(const rk in ROUTES){ if(rk==="CC") continue;
   const a=ROUTES[rk]; TERMS.add(a[0]); TERMS.add(a[a.length-1]); }
 const LPOS={};
 for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
-  if(isRot(s)){   // 斜排标签：登记斜向障碍带，跳过方位求解
+  if(isRot(s)){   // 官方式斜排：默认线束下方向左下；下方有其他线路时翻转到上方
     const {fs}=labelDims(s,1);
     const Lw=s.en.length*fs*0.63+4;
-    obst.push({x0:s.x-2,y0:s.y-6-Lw*0.707,x1:s.x+4+Lw*0.707,y1:s.y+1});
-    LPOS[s.id]={rot:true};
+    const up=STATIONS.some(o=>o!==s && Math.abs(o.x-s.x)<44 &&
+                            o.y>s.y+8 && o.y<s.y+36);
+    if(up){
+      const ty=Math.min(...s._opts.map(p=>p[1]));
+      obst.push({x0:s._px-3,y0:ty-9-Lw*0.707,x1:s._px+6+Lw*0.707,y1:ty-2});
+      LPOS[s.id]={rot:true,up:true,by:ty};
+    } else {
+      const bx=Math.max(...s._opts.map(p=>p[1]));
+      obst.push({x0:s._px-6-Lw*0.707,y0:bx+2,x1:s._px+3,y1:bx+9+Lw*0.707});
+      LPOS[s.id]={rot:true,by:bx};
+    }
     continue;
   }
   const r=stnR(s);
@@ -432,15 +466,16 @@ for(const s of [...STATIONS].sort((a,b)=>(a.p-b.p)||((b.hub||0)-(a.hub||0)))){
     bestA=Infinity;
     for(const [ri,d] of [r+2.0, r+5.0, r+8.5, r+12.5].entries()){
       const dd=d-0.2;
+      const px=s._px, py=s._py;
       const cands=[
-        {a:"start", x:s.x+d,  b:[s.x+d,      s.y-h/2 ]},   // 东
-        {a:"end",   x:s.x-d,  b:[s.x-d-w,    s.y-h/2 ]},   // 西
-        {a:"start", x:s.x+dd, b:[s.x+dd,     s.y-dd-h]},   // 东北
-        {a:"start", x:s.x+dd, b:[s.x+dd,     s.y+dd  ]},   // 东南
-        {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y-dd-h]},   // 西北
-        {a:"end",   x:s.x-dd, b:[s.x-dd-w,   s.y+dd  ]},   // 西南
-        {a:"middle",x:s.x,    b:[s.x-w/2,    s.y-d-h ]},   // 北
-        {a:"middle",x:s.x,    b:[s.x-w/2,    s.y+d   ]},   // 南
+        {a:"start", x:px+d,  b:[px+d,      py-h/2 ]},
+        {a:"end",   x:px-d,  b:[px-d-w,    py-h/2 ]},
+        {a:"start", x:px+dd, b:[px+dd,     py-dd-h]},
+        {a:"start", x:px+dd, b:[px+dd,     py+dd  ]},
+        {a:"end",   x:px-dd, b:[px-dd-w,   py-dd-h]},
+        {a:"end",   x:px-dd, b:[px-dd-w,   py+dd  ]},
+        {a:"middle",x:px,    b:[px-w/2,    py-d-h ]},
+        {a:"middle",x:px,    b:[px-w/2,    py+d   ]},
       ];
       for(const c of cands){
         const box={x0:c.b[0],y0:c.b[1],x1:c.b[0]+w,y1:c.b[1]+h};
@@ -467,55 +502,55 @@ for(const s of STATIONS){
   const L0=LINES[s.ln[0]];
   const allFuture=s.ln.every(k=>!LINES[k].open);
   const r = stnR(s);
-  // 官方风格站点符号：停靠线在并行条带上的位置连成跨线胶囊；单线=小白点；终点=深色方块
-  const opts=[];   // 该站各停靠线的条带落点
-  for(const rk in ROUTES){
-    const arr=ROUTES[rk], idx=arr.indexOf(s.id);
-    if(idx<0) continue;
-    const lk=ROUTE_LINE[rk]||rk;
-    if(!s.ln.includes(lk)) continue;
-    const dv=ROUTE_OFF[rk]||0;
-    const pa=$id(arr[Math.max(0,idx-1)]), pb=$id(arr[Math.min(arr.length-1,idx+1)]);
-    const dx=pb.x-pa.x, dy=pb.y-pa.y, LL2=Math.hypot(dx,dy)||1;
-    const px=s.x+dy/LL2*dv, py=s.y-dx/LL2*dv;
-    if(!opts.some(p=>Math.hypot(p[0]-px,p[1]-py)<1.2)) opts.push([px,py]);
-  }
-  if(!opts.length) opts.push([s.x,s.y]);
-  if(TERMS.has(s.id) && !s.hub){
+  // 官方式站点符号：多线=深灰胶囊+每线一个白点；单线=白点落在所属条带；终点=深色方块
+  const opts=s._opts;
+  if(TERMS.has(s.id) && !s.hub && opts.length===1){
     el("rect",{x:opts[0][0]-3.2,y:opts[0][1]-3.2,width:6.4,height:6.4,rx:1.6,
       fill:"#26262a",filter:"url(#softShadow)"},g);
   } else if(opts.length>1){
-    // 跨线胶囊：一眼看出停靠几条并行线路
     let e1=opts[0],e2=opts[0],dm=0;
     for(const a of opts) for(const b of opts){
       const dd=Math.hypot(a[0]-b[0],a[1]-b[1]);
       if(dd>dm){dm=dd;e1=a;e2=b;}
     }
-    const cr=s.hub?3.1:2.2;
-    el("line",{x1:e1[0],y1:e1[1],x2:e2[0],y2:e2[1],stroke:"#26262a",
-      "stroke-width":cr*2+2.2,"stroke-linecap":"round",filter:"url(#softShadow)"},g);
+    const cr=s.hub?3.0:2.5;
     el("line",{x1:e1[0],y1:e1[1],x2:e2[0],y2:e2[1],stroke:"#fff",
-      "stroke-width":cr*2,"stroke-linecap":"round"},g);
+      "stroke-width":cr*2+3.4,"stroke-linecap":"round"},g);
+    el("line",{x1:e1[0],y1:e1[1],x2:e2[0],y2:e2[1],stroke:"#55565a",
+      "stroke-width":cr*2+1.2,"stroke-linecap":"round",filter:"url(#softShadow)"},g);
+    for(const p of opts)
+      el("circle",{cx:p[0],cy:p[1],r:1.7,fill:"#fff"},g);
   } else {
     el("circle",{cx:opts[0][0],cy:opts[0][1],r,fill:"#fff",
-      stroke:s.hub?"#26262a":(multi?"#26262a":"#4a4a52"),
+      stroke:s.hub?"#26262a":"#4a4a52",
       "stroke-width":s.hub?2.1:1.2,
       filter:s.hub?"url(#softShadow)":"none",
       ...(allFuture?{"stroke-dasharray":"2 1.6"}:{})},g);
   }
   const P=LPOS[s.id], {fs}=labelDims(s);
   const pcls = s._p3 ? "p3" : "p"+s.p;
-  if(P.rot){   // 官方式 45° 斜排（走廊站）
-    const t=el("text",{x:s.x+3,y:s.y-3,"font-size":fs,class:pcls,
-      transform:`rotate(-45 ${s.x} ${s.y})`,
-      fill:"#26262a","font-weight":"600","paint-order":"stroke",
-      stroke:"rgba(247,246,242,.93)","stroke-width":"2.0"},g);
+  if(P.rot){   // 官方式 45° 斜排
+    const bx=s._px;
+    let t;
+    if(P.up){
+      const byy=P.by-4.5;
+      t=el("text",{x:bx+2.5,y:byy-2.5,"font-size":fs,class:pcls,
+        transform:`rotate(-45 ${bx} ${byy})`,
+        fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
+        stroke:"rgba(247,246,242,.93)","stroke-width":"2.0"},g);
+    } else {
+      const byy=P.by+4.5;
+      t=el("text",{x:bx-2.5,y:byy+2.5,"font-size":fs,class:pcls,
+        "text-anchor":"end", transform:`rotate(-45 ${bx} ${byy})`,
+        fill:"#26262a","font-weight":s.hub?"800":"600","paint-order":"stroke",
+        stroke:"rgba(247,246,242,.93)","stroke-width":"2.0"},g);
+    }
     t.textContent=s.en;
   } else {
   if(P.ring>=2){
-    const lx=Math.max(P.box.x0,Math.min(s.x,P.box.x1));
-    const ly=Math.max(P.box.y0,Math.min(s.y,P.box.y1));
-    el("line",{x1:s.x,y1:s.y,x2:lx,y2:ly,stroke:"#a5a5ab",
+    const lx=Math.max(P.box.x0,Math.min(s._px,P.box.x1));
+    const ly=Math.max(P.box.y0,Math.min(s._py,P.box.y1));
+    el("line",{x1:s._px,y1:s._py,x2:lx,y2:ly,stroke:"#a5a5ab",
       "stroke-width":"0.5",class:pcls},g);
   }
   const t=el("text",{x:P.x, y:P.box.y0+fs*0.92, "font-size":fs, class:pcls,
